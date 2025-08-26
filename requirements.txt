@@ -1,0 +1,6 @@
+requests
+orjson
+python-dotenv
+pandas
+aiohttp
+python-dateutil
