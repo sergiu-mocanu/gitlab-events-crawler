@@ -24,7 +24,7 @@ This project demonstrates skills in:
 
 Clone the repository and install dependencies:
 
-    git clone https://github.com/SergiuMocanu10/gitlab-events-crawler
+    git clone https://github.com/sergiu-mocanu/gitlab-events-crawler
     cd gitlab-events-crawler
     pip install -r requirements.txt
 
