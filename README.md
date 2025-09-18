@@ -97,3 +97,7 @@ Issues and pull requests are welcome. Please follow standard practices:
 2. Create a feature branch (git checkout -b feature/xyz)
 3. Commit changes with clear messages
 4. Open a Pull Request
+
+### License
+
+This project is licensed under the terms of the MIT license.
