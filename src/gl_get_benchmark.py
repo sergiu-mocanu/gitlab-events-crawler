@@ -135,7 +135,7 @@ def datetime_to_hour(dt: datetime):
 
 
 """
-Dictionary templates used for the benchmark results written to JSON/CSV files
+Dictionary templates used for the activity stats written to JSON/CSV files
 """
 class CrawlerConfigDict(TypedDict):
     instance: str
@@ -209,7 +209,7 @@ class CSVStats(TypedDict):
     nb_request_errors: int
 
 
-class BenchmarkStats:
+class ActivityStats:
 
     def __init__(self, gl_instance: str, trigger_frequency: int):
         self.data: OverallStats = {
@@ -609,7 +609,7 @@ class GitLabCrawler:
             config: crawler config
             trigger_tracker: tracker for projects and events recovered during the current crawl
             backlog_tracker: track the backlog projects and events
-            benchmark_stats: track and document the forge activity
+            activity_stats: track and document the forge activity
             projects_events: manage the recovered projects and events
             processing_timer: measure the time for recovering all the projects and events
 
@@ -652,8 +652,8 @@ class GitLabCrawler:
 
         self.backlog_tracker = BacklogTracker()
 
-        self.benchmark_stats = BenchmarkStats(gl_instance=self.config.gl_instance.name,
-                                              trigger_frequency=int(self.config.trigger_frequency / 60))
+        self.activity_stats = ActivityStats(gl_instance=self.config.gl_instance.name,
+                                             trigger_frequency=int(self.config.trigger_frequency / 60))
 
         self.projects_events = ProjectsEventsTracker()
 
@@ -714,30 +714,30 @@ class GitLabCrawler:
                     nb_recovered_projects = self.trigger_tracker.get_nb_recovered_projects()
                     projects_recovery_time = self.trigger_tracker.get_projects_recovery_time()
                     projects_response_time = self.trigger_tracker.get_projects_response_time()
-                    self.benchmark_stats.set_trigger_projects(nb_recovered_projects, projects_recovery_time,
+                    self.activity_stats.set_trigger_projects(nb_recovered_projects, projects_recovery_time,
                                                               projects_response_time)
 
                     nb_recovered_events = self.trigger_tracker.get_nb_recovered_events()
                     events_response_time = self.trigger_tracker.get_events_response_time()
 
-                    self.benchmark_stats.set_trigger_events(nb_events=nb_recovered_events,
+                    self.activity_stats.set_trigger_events(nb_events=nb_recovered_events,
                                                             list_response_time=events_response_time)
 
                     processing_time = self.processing_timer.get_elapsed_time()
                     nb_request_errors = self.trigger_tracker.get_nb_request_errors()
 
-                    self.benchmark_stats.set_trigger_stats(current_time=current_time,
+                    self.activity_stats.set_trigger_stats(current_time=current_time,
                                                            processing_time=processing_time,
                                                            nb_errors=nb_request_errors)
 
-                    self.benchmark_stats.disk_write_json()
+                    self.activity_stats.disk_write_json()
 
                     if self.processing_timer.is_first_processing_measured():
                         # Write activity stats in a CSV file
                         _, projects_avg_time = total_and_avg_time(self.trigger_tracker.get_projects_response_time())
                         _, events_avg_time = total_and_avg_time(self.trigger_tracker.get_events_response_time())
 
-                        self.benchmark_stats.append_csv_stats(current_time=current_time,
+                        self.activity_stats.append_csv_stats(current_time=current_time,
                                                               nb_projects=nb_recovered_projects,
                                                               projects_avg_time=projects_avg_time,
                                                               nb_events=nb_recovered_events,
@@ -745,7 +745,7 @@ class GitLabCrawler:
                                                               processing_time=processing_time,
                                                               nb_errors=nb_request_errors)
 
-                        self.benchmark_stats.disk_write_csv()
+                        self.activity_stats.disk_write_csv()
 
                     self.trigger_tracker.reset_tracker()
 
@@ -767,10 +767,10 @@ class GitLabCrawler:
 
                 nb_backlog_events = self.backlog_tracker.get_nb_events()
                 events_response_time = self.trigger_tracker.get_events_response_time()
-                self.benchmark_stats.set_backlog_events(time_elapsed=recovery_duration, nb_events=nb_backlog_events,
+                self.activity_stats.set_backlog_events(time_elapsed=recovery_duration, nb_events=nb_backlog_events,
                                                         response_time=events_response_time)
 
-                self.benchmark_stats.disk_write_json()
+                self.activity_stats.disk_write_json()
 
                 self.trigger_tracker.reset_tracker()
 
@@ -855,9 +855,9 @@ class GitLabCrawler:
         nb_backlog_projects = self.projects_events.get_nb_projects()
         response_time = self.trigger_tracker.get_projects_response_time()
         recovery_time = self.trigger_tracker.get_projects_recovery_time()
-        self.benchmark_stats.set_backlog_projects(time_window=time_window_formatted, nb_projects=nb_backlog_projects,
+        self.activity_stats.set_backlog_projects(time_window=time_window_formatted, nb_projects=nb_backlog_projects,
                                                   recovery_time=recovery_time, list_response_time=response_time)
-        self.benchmark_stats.disk_write_json()
+        self.activity_stats.disk_write_json()
 
         self.backlog_tracker.set_nb_projects(nb_backlog_projects)
 
@@ -1140,7 +1140,7 @@ class GitLabCrawler:
                     end = time.time()
 
                     disk_write_duration = end - start
-                    self.benchmark_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
+                    self.activity_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
                     self.projects_events.set_no_new_events(timestamp)
 
             disk_write_end = time.time()
@@ -1149,8 +1149,8 @@ class GitLabCrawler:
             current_hour = reset_hour_beginning(current_time)
             current_hour_str = datetime_to_str(current_hour)
 
-            self.benchmark_stats.set_overall_disk_write(current_hour_str, total_write_duration)
-            self.benchmark_stats.disk_write_json()
+            self.activity_stats.set_overall_disk_write(current_hour_str, total_write_duration)
+            self.activity_stats.disk_write_json()
 
 
     def initialize_folders_and_filepath(self, separate_folders: bool = False):
@@ -1159,7 +1159,7 @@ class GitLabCrawler:
         """
         if separate_folders:
             self.config.stats_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name,
-                                                 'benchmark_stats')
+                                                 'activity_stats')
             self.config.events_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name, 'events')
 
         os.makedirs(self.config.stats_dir, exist_ok=True)
@@ -1169,7 +1169,7 @@ class GitLabCrawler:
         json_path = os.path.join(self.config.stats_dir, f'{datetime_formatted}h.json')
         csv_path = os.path.join(self.config.stats_dir, f'{datetime_formatted}h.csv')
 
-        self.benchmark_stats.set_file_path(json_path=json_path, csv_path=csv_path)
+        self.activity_stats.set_file_path(json_path=json_path, csv_path=csv_path)
 
 ################################################################################
 def find_project_root(marker: str ='requirements.txt') -> Path:
