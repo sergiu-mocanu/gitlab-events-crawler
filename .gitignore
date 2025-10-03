@@ -1,26 +1,3 @@
-# editors and IDE
 .idea
-*.swp
-*~
-
-# environment
-.venv
-forge_tools/src/gh_events_delay/.env
-gh_events_delay/data
-
-# python
-*.pyc
 __pycache__/
-.venv/
-.pytest_cache/
-
-# modelio
-**/modelio/**/.runtime/
-**/modelio/**/.index/
-**/modelio/**/localmodel/
-**/modelio/**/blobs/
-**/modelio/**/XMI/
-stamp.dat
-
-# gitlab crawler bench
 **/venv
