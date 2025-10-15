@@ -1,6 +1,6 @@
 import time
 
-from typing import Dict, Optional, TypedDict
+from typing import Optional, TypedDict
 
 from bisect import insort
 

@@ -6,6 +6,7 @@ from gitlab_crawler.models import GitLabToken, GitLabInstance
 
 from gitlab_crawler.crawler import GitLabCrawler
 
+
 def get_args():
     """
     Command line parsing and help.
