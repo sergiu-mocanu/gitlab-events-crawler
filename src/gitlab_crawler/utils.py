@@ -3,6 +3,7 @@ from pathlib import Path
 
 from gitlab_crawler.types_formats import JSON_DATE_FORMAT
 
+
 def find_project_root(marker: str ='requirements.txt') -> Path:
     """
     Find the path of the project's root directory
@@ -12,6 +13,7 @@ def find_project_root(marker: str ='requirements.txt') -> Path:
         if (parent / marker).exists():
             return parent
     raise FileNotFoundError(f"Could not find {marker} in any parent directories")
+
 
 def total_and_avg_time(response_time: list[float]):
     """
@@ -37,7 +39,7 @@ def reset_hour_beginning(dt: datetime):
 
 def datetime_to_str(dt: datetime, utc: bool = False):
     """
-    Format a datetime to a string used as a timestamp in JSON/CsV files
+    Format a datetime to a string used as a timestamp in JSON/CSV files
     Removes the UTC offset if present
     """
     res_dt = remove_milliseconds(dt)
