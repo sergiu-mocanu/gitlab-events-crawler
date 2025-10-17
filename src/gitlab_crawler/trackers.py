@@ -94,10 +94,6 @@ class BacklogTracker:
         return self._nb_backlog_events
 
 
-    def events_recovered(self):
-        return self._backlog_events_recovered
-
-
     def set_recovery_finished(self):
         self._backlog_events_recovered = True
 
@@ -146,7 +142,7 @@ class ProjectsEventsTracker:
         return len(self._recent_projects_ids) == 0
 
 
-    def add_event_known(self, event_id: int, project_id: int):
+    def _add_event_known(self, event_id: int, project_id: int):
         self._known_events[event_id] = project_id
 
 
@@ -158,10 +154,13 @@ class ProjectsEventsTracker:
         return list(self._timestamp_events.keys())
 
 
-    def store_event(self, event: GitLabEvent):
+    def store_event(self, event: GitLabEvent, project_id: int):
         """
         Store the event in the according timestamp (date and hour) in chronological order
         """
+        event_id = object_id(event)
+        self._add_event_known(event_id, project_id)
+
         event_timestamp = event_creation_date(event).strftime(JSON_DATE_FORMAT)
 
         if event_timestamp not in self._timestamp_events:

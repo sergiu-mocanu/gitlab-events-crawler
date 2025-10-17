@@ -334,9 +334,7 @@ class GitLabCrawler:
         self.trigger_tracker.extend_events_response_time(list_response_time)
 
         for event in recent_events:
-            event_id = object_id(event)
-            self.projects_events.add_event_known(event_id, project_id)
-            self.projects_events.store_event(event)
+            self.projects_events.store_event(event, project_id)
 
         if not self.backlog_tracker.are_all_projects_processed():
             self.backlog_tracker.decr_nb_projects()
