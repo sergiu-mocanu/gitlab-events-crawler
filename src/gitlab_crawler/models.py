@@ -139,17 +139,46 @@ class CSVStats(TypedDict):
 
 
 class ActivityStats:
+    EMPTY_BACKLOG_PROJECTS: BacklogProjects = {
+        'backlog_time_window': '',
+        'nb_recovered_projects': 0,
+        'recovery_time': 0.0,
+        'response_time_average': 0.0,
+        'response_time_list': []
+    }
+
+    EMPTY_BACKLOG_EVENTS: BacklogEvents = {
+        'events_recovery_time': '',
+        'nb_recovered_events': 0,
+        'avg_response_time': 0.0,
+        'response_time': []
+    }
+
+    EMPTY_TRIGGER_PROJECT_RECOVERY: TriggerProjectRecovery = {
+        'nb_recovered_projects': 0,
+        'projects_recovery_time': 0.0,
+        'projects_response_time_avg': 0.0,
+        'projects_response_time_list': []
+    }
+
+    EMPTY_TRIGGER_EVENT_RECOVERY: TriggerEventRecovery = {
+        'nb_processed_projects': 0,
+        'nb_recovered_events': 0,
+        'events_response_time_avg': 0.0,
+        'events_response_time_total': '',
+        'events_response_time_list': []
+    }
 
     def __init__(self, gl_instance: str, trigger_frequency: int):
         self.data: OverallStats = {
             'crawler_config': {'instance': gl_instance, 'trigger_frequency': trigger_frequency},
-            'backlog_projects_recovery': cast(BacklogProjects, {}),
-            'backlog_events_recovery': cast(BacklogEvents, {}),
+            'backlog_projects_recovery': self.EMPTY_BACKLOG_PROJECTS.copy(),
+            'backlog_events_recovery': self.EMPTY_BACKLOG_EVENTS.copy(),
             'event_disk_writes': {},
             'crawls': {}
         }
-        self.trigger_projects_recovery = cast(TriggerProjectRecovery, {})
-        self.trigger_events_recovery = cast(TriggerEventRecovery, {})
+        self.trigger_projects_recovery = self.EMPTY_TRIGGER_PROJECT_RECOVERY.copy()
+        self.trigger_events_recovery = self.EMPTY_TRIGGER_EVENT_RECOVERY.copy()
         self.csv_stats: list[CSVStats] = []
         self.hourly_event_writes: Dict[Timestamp, DiskWriteTimestamp] = {}
         self.json_file_path: Optional[str] = None
