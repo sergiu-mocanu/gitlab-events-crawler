@@ -524,13 +524,8 @@ class GitLabCrawler:
                     self.trigger_tracker.increment_nb_request_errors()
                     await asyncio.sleep(self.config.request_delay)
 
-            except asyncio.TimeoutError:
-                logger.error('Request timed out')
-                self.trigger_tracker.increment_nb_request_errors()
-                await asyncio.sleep(self.config.request_delay)
-
-            except aiohttp.ClientConnectionError:
-                logger.error("Connection failed.")
+            except (asyncio.TimeoutError, aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as exception:
+                logger.error(f'Request error: {type(exception).__name__}')
                 self.trigger_tracker.increment_nb_request_errors()
                 await asyncio.sleep(self.config.request_delay)
 
