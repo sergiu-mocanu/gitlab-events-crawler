@@ -1,7 +1,7 @@
 import orjson
 import pandas as pd
 
-from typing import Optional, Dict, TypedDict, cast
+from typing import Optional, Dict, TypedDict
 from datetime import datetime
 
 from gitlab_crawler.utils import datetime_to_str, total_and_avg_time
@@ -139,6 +139,10 @@ class CSVStats(TypedDict):
 
 
 class ActivityStats:
+    """
+    Manage the format of all the crawling and activity stats written to JSON/CSV files.
+    This includes backlog project/event recovery, crawl recovery, server response time, disk writes
+    """
     EMPTY_BACKLOG_PROJECTS: BacklogProjects = {
         'backlog_time_window': '',
         'nb_recovered_projects': 0,
@@ -188,10 +192,6 @@ class ActivityStats:
     def set_file_path(self, *, json_path: str, csv_path: str):
         self.json_file_path = json_path
         self.csv_file_path = csv_path
-
-
-    def set_config(self, instance: str, trigger_frequency: int):
-        self.data['crawler_config'] = CrawlerConfigDict(instance=instance, trigger_frequency=trigger_frequency)
 
 
     def set_backlog_projects(self, *, time_window: str, nb_projects: int,
