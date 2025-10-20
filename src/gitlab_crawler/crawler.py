@@ -162,7 +162,7 @@ class GitLabCrawler:
                                                               nb_projects=nb_recovered_projects,
                                                               projects_avg_time=projects_avg_time,
                                                               nb_events=nb_recovered_events,
-                                                              events_avg_response_time=events_avg_time,
+                                                              events_avg_time=events_avg_time,
                                                               processing_time=processing_time,
                                                               nb_errors=nb_request_errors)
 

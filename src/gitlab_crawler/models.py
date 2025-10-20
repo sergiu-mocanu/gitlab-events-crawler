@@ -252,7 +252,7 @@ class ActivityStats:
 
 
     def append_csv_stats(self, *, current_time: datetime, nb_projects: int, projects_avg_time: float,
-                      nb_events: int, events_avg_response_time: float, processing_time: float, nb_errors: int):
+                      nb_events: int, events_avg_time: float, processing_time: float, nb_errors: int):
 
         # Extract the day of the week (e.g., Mon, Tue, Wen)
         weekday = current_time.strftime('%a')
@@ -263,7 +263,7 @@ class ActivityStats:
                           'nb_recovered_projects': nb_projects,
                           'projects_avg_response_time': projects_avg_time,
                           'nb_recovered_events': nb_events,
-                          'events_avg_response_time': events_avg_response_time,
+                          'events_avg_response_time': events_avg_time,
                           'processing_time': processing_time,
                           'nb_request_errors': nb_errors}
 
