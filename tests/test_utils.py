@@ -1,7 +1,6 @@
 import pytest
 from datetime import datetime, timezone
 from pathlib import Path
-from gitlab_crawler.types_formats import JSON_DATE_FORMAT
 
 from gitlab_crawler.utils import (
     find_project_root, total_and_avg_time, remove_milliseconds,
@@ -17,7 +16,7 @@ def marker_name() -> str:
 
 # --- Tests for find_project_root ---
 
-def test_find_project_root_returns_current_dir(monkeypatch, tmp_path: Path, marker_name: str):
+def test_find_project_root_returns_current_dir(monkeypatch, tmp_path, marker_name):
     """Should return current dir if marker exists there."""
     (tmp_path / marker_name).touch()
 
@@ -29,7 +28,7 @@ def test_find_project_root_returns_current_dir(monkeypatch, tmp_path: Path, mark
     assert isinstance(result, Path)
 
 
-def test_find_project_root_returns_parent_dir(monkeypatch, tmp_path: Path, marker_name: str):
+def test_find_project_root_returns_parent_dir(monkeypatch, tmp_path, marker_name):
     """Should climb up and find marker in parent."""
     parent = tmp_path / 'project'
     child = parent / 'subdir'
@@ -42,7 +41,7 @@ def test_find_project_root_returns_parent_dir(monkeypatch, tmp_path: Path, marke
     assert result == parent
 
 
-def test_find_project_root_multiple_matches(monkeypatch, tmp_path: Path, marker_name: str):
+def test_find_project_root_multiple_matches(monkeypatch, tmp_path, marker_name):
     """Should return the nearest match (current dir first)."""
     parent = tmp_path / 'outer'
     child = parent / 'inner'
@@ -55,14 +54,14 @@ def test_find_project_root_multiple_matches(monkeypatch, tmp_path: Path, marker_
     assert result == child
 
 
-def test_find_project_root_not_found(monkeypatch, tmp_path: Path, marker_name: str):
+def test_find_project_root_not_found(monkeypatch, tmp_path, marker_name):
     """Should raise FileNotFoundError if marker is missing."""
     monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError):
         find_project_root()
 
 
-def test_find_project_root_custom_marker(monkeypatch, tmp_path: Path):
+def test_find_project_root_custom_marker(monkeypatch, tmp_path):
     """Should return current dir if custom marker exists there."""
     custom_marker = 'pyproject.toml'
     (tmp_path / custom_marker).touch()
@@ -141,7 +140,7 @@ def test_reset_hour_beginning():
 
 def test_datetime_to_str():
     """Should convert datetime to string."""
-    dt = datetime(2020, 1, 2, 3, 4, 5)
+    dt = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
     res = datetime_to_str(dt)
     assert isinstance(res, str)
     assert res == '2020-01-02T03:04:05'
@@ -155,14 +154,3 @@ def test_datetime_to_hour():
     res = datetime_to_hour(dt)
     assert isinstance(res, str)
     assert res == '2020-01-02--3'
-
-
-# --- Tests for datetime_to_str ---
-
-def test_datetime_to_str_removes_utc() -> None:
-    """Ensure UTC offset is removed from ISO timestamp string."""
-    dt = datetime(2024, 5, 5, 12, 0, tzinfo=timezone.utc)
-    res = datetime_to_str(dt)
-    assert '+' not in res
-
-

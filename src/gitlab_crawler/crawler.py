@@ -497,6 +497,7 @@ class GitLabCrawler:
 
                 elif e.status == 401:
                     logger.error(f'Request error: {e.status} Unauthorized')
+                    request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
@@ -504,6 +505,7 @@ class GitLabCrawler:
                     logger.error(f'Request error: {e.status} Forbidden')
                     logger.error(f'Response content:\n{self.response_text}')
                     logger.error(f'Endpoint: {url}')
+                    request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
