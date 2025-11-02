@@ -6,6 +6,7 @@ from gitlab_crawler.models import GitLabToken, GitLabInstance
 
 from gitlab_crawler.crawler import GitLabCrawler
 
+
 def get_args():
     """
     Command line parsing and help.
@@ -17,22 +18,22 @@ def get_args():
 
     default_instance = 'gitlab.com'
     my_parser.add_argument("-i", "--instance", type=str, default=default_instance,
-                           help=f"Choose the target GitLab instance. Defaults to {default_instance}")
+                           help=f"Choose the target GitLab instance. Defaults to {default_instance}.")
 
     default_trigger_frequency = 60
     my_parser.add_argument("-fr", "--frequency", type=int, default=default_trigger_frequency,
                            help=f"Choose the trigger frequency (in minutes) between forge crawls. "
-                                f"Defaults to {default_trigger_frequency} minutes")
+                                f"Defaults to {default_trigger_frequency} minutes.")
 
     default_timeout_value = 60
     my_parser.add_argument("-tm", "--timeout", type=int, default=default_timeout_value,
                            help=f"Choose the maximum timeout value (in minutes) for successfully sending a request. "
-                                f"Defaults to {default_timeout_value} minutes")
+                                f"Defaults to {default_timeout_value} minutes.")
 
     default_request_delay = 0
     my_parser.add_argument("-d", "--delay", type=int, default=default_request_delay,
                            help=f"Choose the delay after a failed request (in seconds). "
-                                f"Defaults to {default_timeout_value} seconds")
+                                f"Defaults to {default_timeout_value} seconds.")
 
     my_parser.add_argument("-v", "--verbose", action="store_true")
 
@@ -41,10 +42,10 @@ def get_args():
     gl_data_dir = os.path.join(project_root_parent, 'gitlab_events')
     my_parser.add_argument("-p", "--target_dir", type=str, default=gl_data_dir,
                            help=f"Choose the target folder for storing the GitLab events. Defaults to the parent folder"
-                                f"of the project: {gl_data_dir}")
+                                f"of the project: {gl_data_dir}.")
 
     my_parser.add_argument("-to", "--token", type=str,
-                           help=f"Choose the GitLab instance token used for authentication. Defaults to no token")
+                           help=f"Insert the path to the GitLab token used for authentication. Defaults to no token.")
 
     return my_parser.parse_args()
 

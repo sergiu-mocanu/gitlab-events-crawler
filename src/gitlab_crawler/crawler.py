@@ -162,7 +162,7 @@ class GitLabCrawler:
                                                               nb_projects=nb_recovered_projects,
                                                               projects_avg_time=projects_avg_time,
                                                               nb_events=nb_recovered_events,
-                                                              events_avg_response_time=events_avg_time,
+                                                              events_avg_time=events_avg_time,
                                                               processing_time=processing_time,
                                                               nb_errors=nb_request_errors)
 
@@ -334,9 +334,7 @@ class GitLabCrawler:
         self.trigger_tracker.extend_events_response_time(list_response_time)
 
         for event in recent_events:
-            event_id = object_id(event)
-            self.projects_events.add_event_known(event_id, project_id)
-            self.projects_events.store_event(event)
+            self.projects_events.store_event(event, project_id)
 
         if not self.backlog_tracker.are_all_projects_processed():
             self.backlog_tracker.decr_nb_projects()
@@ -499,6 +497,7 @@ class GitLabCrawler:
 
                 elif e.status == 401:
                     logger.error(f'Request error: {e.status} Unauthorized')
+                    request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
@@ -506,6 +505,7 @@ class GitLabCrawler:
                     logger.error(f'Request error: {e.status} Forbidden')
                     logger.error(f'Response content:\n{self.response_text}')
                     logger.error(f'Endpoint: {url}')
+                    request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
@@ -526,13 +526,8 @@ class GitLabCrawler:
                     self.trigger_tracker.increment_nb_request_errors()
                     await asyncio.sleep(self.config.request_delay)
 
-            except asyncio.TimeoutError:
-                logger.error('Request timed out')
-                self.trigger_tracker.increment_nb_request_errors()
-                await asyncio.sleep(self.config.request_delay)
-
-            except aiohttp.ClientConnectionError:
-                logger.error("Connection failed.")
+            except (asyncio.TimeoutError, aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as exception:
+                logger.error(f'Request error: {type(exception).__name__}')
                 self.trigger_tracker.increment_nb_request_errors()
                 await asyncio.sleep(self.config.request_delay)
 

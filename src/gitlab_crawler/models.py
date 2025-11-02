@@ -1,7 +1,7 @@
 import orjson
 import pandas as pd
 
-from typing import Optional, Dict, TypedDict, cast
+from typing import Optional, Dict, TypedDict
 from datetime import datetime
 
 from gitlab_crawler.utils import datetime_to_str, total_and_avg_time
@@ -139,17 +139,50 @@ class CSVStats(TypedDict):
 
 
 class ActivityStats:
+    """
+    Manage the format of all the crawling and activity stats written to JSON/CSV files.
+    This includes backlog project/event recovery, crawl recovery, server response time, disk writes
+    """
+    EMPTY_BACKLOG_PROJECTS: BacklogProjects = {
+        'backlog_time_window': '',
+        'nb_recovered_projects': 0,
+        'recovery_time': 0.0,
+        'response_time_average': 0.0,
+        'response_time_list': []
+    }
+
+    EMPTY_BACKLOG_EVENTS: BacklogEvents = {
+        'events_recovery_time': '',
+        'nb_recovered_events': 0,
+        'avg_response_time': 0.0,
+        'response_time': []
+    }
+
+    EMPTY_TRIGGER_PROJECT_RECOVERY: TriggerProjectRecovery = {
+        'nb_recovered_projects': 0,
+        'projects_recovery_time': 0.0,
+        'projects_response_time_avg': 0.0,
+        'projects_response_time_list': []
+    }
+
+    EMPTY_TRIGGER_EVENT_RECOVERY: TriggerEventRecovery = {
+        'nb_processed_projects': 0,
+        'nb_recovered_events': 0,
+        'events_response_time_avg': 0.0,
+        'events_response_time_total': '',
+        'events_response_time_list': []
+    }
 
     def __init__(self, gl_instance: str, trigger_frequency: int):
         self.data: OverallStats = {
             'crawler_config': {'instance': gl_instance, 'trigger_frequency': trigger_frequency},
-            'backlog_projects_recovery': cast(BacklogProjects, {}),
-            'backlog_events_recovery': cast(BacklogEvents, {}),
+            'backlog_projects_recovery': self.EMPTY_BACKLOG_PROJECTS.copy(),
+            'backlog_events_recovery': self.EMPTY_BACKLOG_EVENTS.copy(),
             'event_disk_writes': {},
             'crawls': {}
         }
-        self.trigger_projects_recovery = cast(TriggerProjectRecovery, {})
-        self.trigger_events_recovery = cast(TriggerEventRecovery, {})
+        self.trigger_projects_recovery = self.EMPTY_TRIGGER_PROJECT_RECOVERY.copy()
+        self.trigger_events_recovery = self.EMPTY_TRIGGER_EVENT_RECOVERY.copy()
         self.csv_stats: list[CSVStats] = []
         self.hourly_event_writes: Dict[Timestamp, DiskWriteTimestamp] = {}
         self.json_file_path: Optional[str] = None
@@ -159,10 +192,6 @@ class ActivityStats:
     def set_file_path(self, *, json_path: str, csv_path: str):
         self.json_file_path = json_path
         self.csv_file_path = csv_path
-
-
-    def set_config(self, instance: str, trigger_frequency: int):
-        self.data['crawler_config'] = CrawlerConfigDict(instance=instance, trigger_frequency=trigger_frequency)
 
 
     def set_backlog_projects(self, *, time_window: str, nb_projects: int,
@@ -223,7 +252,7 @@ class ActivityStats:
 
 
     def append_csv_stats(self, *, current_time: datetime, nb_projects: int, projects_avg_time: float,
-                      nb_events: int, events_avg_response_time: float, processing_time: float, nb_errors: int):
+                      nb_events: int, events_avg_time: float, processing_time: float, nb_errors: int):
 
         # Extract the day of the week (e.g., Mon, Tue, Wen)
         weekday = current_time.strftime('%a')
@@ -234,7 +263,7 @@ class ActivityStats:
                           'nb_recovered_projects': nb_projects,
                           'projects_avg_response_time': projects_avg_time,
                           'nb_recovered_events': nb_events,
-                          'events_avg_response_time': events_avg_response_time,
+                          'events_avg_response_time': events_avg_time,
                           'processing_time': processing_time,
                           'nb_request_errors': nb_errors}
 
