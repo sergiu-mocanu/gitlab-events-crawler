@@ -1,20 +1,35 @@
 import os
 import argparse
 import re
+from pathlib import Path
 from typing import Optional
-
-from src.gl_get_benchmark import find_project_root
 
 master_file_name: str = '0_master.txt'
 log_folder_path: Optional[str] = None
 
 
-def get_failed_instances(target_path: str, target_timestamp: str):
+def find_project_root(marker: str ='requirements.txt') -> Path:
+    """
+    Find the path of the project's root directory
+    """
+    path = Path().resolve()
+    for parent in [path] + list(path.parents):
+        if (parent / marker).exists():
+            return parent
+    raise FileNotFoundError(f"Could not find {marker} in any parent directories")
+
+
+project_root_parent = find_project_root().parent
+benchmark_results_path = os.path.join(project_root_parent, 'crawler-benchmark')
+
+
+def get_failed_instances(target_timestamp: str):
     global master_file_name
     global log_folder_path
+    global benchmark_results_path
 
     if target_timestamp is None:
-        last_log_folder = sorted(os.listdir(target_path))[-1]
+        last_log_folder = sorted(os.listdir(benchmark_results_path))[-1]
     else:
         last_log_folder = target_timestamp
 
@@ -22,7 +37,7 @@ def get_failed_instances(target_path: str, target_timestamp: str):
     if not re.match(expected_name_format, last_log_folder):
         raise ValueError('Path does not contain the expected folder name')
 
-    log_folder_path = os.path.join(target_path, last_log_folder)
+    log_folder_path = os.path.join(benchmark_results_path, last_log_folder)
 
     master_file_path = os.path.join(log_folder_path, master_file_name)
 
@@ -32,11 +47,12 @@ def get_failed_instances(target_path: str, target_timestamp: str):
     return failed_instances
 
 
-def check_crawler_execution(target_path: str, target_timestamp: str):
+def check_crawler_execution(target_timestamp: str):
     global master_file_name
     global log_folder_path
+    global benchmark_results_path
 
-    failed_instances = get_failed_instances(target_path, target_timestamp)
+    failed_instances = get_failed_instances(target_timestamp)
 
     accepted_logs = ['No more events left to fetch', 'number recovered projects', 'Starting', 'Fetched', 'Backlog',
                      'Shutdown', 'Request timed out', 'Connection failed']
@@ -61,11 +77,11 @@ def check_crawler_execution(target_path: str, target_timestamp: str):
             print('_' * 80)
 
 
-def print_failed_instances(target_path: str, target_timestamp: str = None):
+def print_failed_instances(target_timestamp: str = None):
     global master_file_name
     global log_folder_path
 
-    failed_instances = get_failed_instances(target_path, target_timestamp)
+    failed_instances = get_failed_instances(target_timestamp)
 
     for instance in failed_instances:
         failed_instance_path = os.path.join(log_folder_path, f'{instance}.log')
@@ -89,23 +105,10 @@ def get_args():
                                                     "forbidden request). "
                                                     "To be launched after the execution of the benchmark")
 
-    project_root_parent = find_project_root().parent
-    gl_data_dir = os.path.join(project_root_parent, 'gitlab_instances_events')
-    my_parser.add_argument('-d', '--dir-log', type=str, default=gl_data_dir,
-                           help='Folder that holds the log files of the parallel crawler execution. '
-                                f'Defaults to {gl_data_dir}')
-
     default_timestamp = None
     my_parser.add_argument('-t', '--timestamp', type=str, default=default_timestamp,
                            help='Target timestamp to be analyzed. Defaults to the last executed benchmark.')
 
-
-    my_parser.add_argument("-ce", "--crawler-exec", action="store_true",
-                           help='Display crawler executions that lead to unhandled exception or bugs')
-
-
-    my_parser.add_argument("-fi", "--failed-instances", action="store_true",
-                           help='Print the GitLab instances that failed crawling (e.g., server timeout, forbidden request)')
 
     return my_parser.parse_args()
 
@@ -113,18 +116,9 @@ def get_args():
 if __name__ == "__main__":
     my_args = get_args()
 
-    target_dir = my_args.dir_log
     timestamp = my_args.timestamp
-    crawler_execution = my_args.crawler_exec
-    faulty_instances = my_args.failed_instances
-    if crawler_execution:
-        check_crawler_execution(target_dir, timestamp)
 
-    elif faulty_instances:
-        print_failed_instances(target_dir, timestamp)
-
-    else:
-        print('*' * 40 + 'Crawler fail' + '*' * 40)
-        check_crawler_execution(target_dir, timestamp)
-        print('*' * 40 + 'Failed instances' + '*' * 40)
-        print_failed_instances(target_dir, timestamp)
+    print('*' * 40 + 'Crawler fail' + '*' * 40)
+    check_crawler_execution(timestamp)
+    print('*' * 40 + 'Failed instances' + '*' * 40)
+    print_failed_instances(timestamp)
