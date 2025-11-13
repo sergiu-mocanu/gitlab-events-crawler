@@ -1,5 +1,6 @@
 import argparse
 import os
+from dotenv import load_dotenv
 
 from gitlab_crawler.utils import find_project_root
 from gitlab_crawler.models import GitLabToken, GitLabInstance
@@ -57,7 +58,8 @@ if __name__ == "__main__":
     frequency = my_args.frequency
     timeout = my_args.timeout
     request_delay = my_args.delay
-    verbose_mode = my_args.verbose
+    # verbose_mode = my_args.verbose
+    verbose_mode = True
     target_dir = my_args.target_dir
 
     if my_args.token is not None:
@@ -66,10 +68,15 @@ if __name__ == "__main__":
     else:
         gitlab_token = None
 
+    load_dotenv()
+    db_dsn = os.getenv('GITLAB_CRAWLER_DB_DSN')
+    print(db_dsn)
+
     gitlab_instance = GitLabInstance(instance_name)
 
     crawler_config = GitLabCrawler.CrawlerConfig(gl_instance=gitlab_instance, trigger_frequency=frequency,
                                                  timeout_value=timeout, delay=request_delay, verbose=verbose_mode,
-                                                 gl_token=gitlab_token, data_dir=target_dir)
+                                                 gl_token=gitlab_token, data_dir=target_dir,
+                                                 db_dsn=db_dsn)
     crawler = GitLabCrawler(crawler_config)
     crawler.start()

@@ -4,3 +4,4 @@ python-dotenv
 pandas
 aiohttp
 python-dateutil
+python-dotenv

@@ -13,6 +13,7 @@ from gitlab_crawler.models import GitLabInstance, GitLabToken, ActivityStats
 from gitlab_crawler.trackers import *
 from gitlab_crawler.types_formats import GitLabEvent, GitLabProject
 from gitlab_crawler.utils import *
+from gitlab_crawler.db import Database
 
 
 logging.basicConfig(
@@ -50,7 +51,7 @@ class GitLabCrawler:
             data_dir (str): path to the directory where events and activity stats will be stored
         """
         def __init__(self, *, gl_instance: GitLabInstance, trigger_frequency: int, timeout_value: int, delay: int,
-                     verbose: bool, data_dir: str, gl_token: GitLabToken = None):
+                     verbose: bool, data_dir: str, gl_token: GitLabToken = None, db_dsn: Optional[str] = None):
             self.crawler_start_hour: datetime = reset_hour_beginning(datetime.now(timezone.utc))
             self.gl_instance: GitLabInstance = gl_instance
             self.gl_token: GitLabToken = gl_token
@@ -65,9 +66,11 @@ class GitLabCrawler:
             self.request_header = {'Content-Type': 'application/json'}
             if gl_token is not None:
                 self.request_header.update({'Authorization': f'Bearer {self.gl_token.value}'})
+            self.db_dsn: Optional[str] = db_dsn
 
     def __init__(self, config: CrawlerConfig):
         self.config = config
+        self.db: Database | None = None
 
         self.trigger_tracker = TriggerCrawlTracker()
 
@@ -115,6 +118,11 @@ class GitLabCrawler:
 
         # Create the folders for events and activity stats
         self.initialize_folders_and_filepath(separate_folders=True)
+
+        if self.config.db_dsn is not None:
+            self.db = Database(self.config.db_dsn)
+            await self.db.connect()
+            await self.db.init_schema()
 
         logger.info('Starting recovery of backlog projects')
         await self.recover_backlog_projects()
@@ -203,7 +211,7 @@ class GitLabCrawler:
             if self.current_hour != current_hour:
                 # At the end of the hour, write event file to disk if new events were recovered
                 self.current_hour = current_hour
-                self.disk_write_events()
+                await self.store_events()
 
             if not self.projects_events.is_project_list_exhausted():
                 # Fetch events as long as there are projects left
@@ -233,10 +241,13 @@ class GitLabCrawler:
         self.running = False
 
         if self.projects_events.are_new_events_found():
-            self.disk_write_events()
+            await self.store_events()
             logger.info('All new events were successfully written to disk')
         else:
             logger.info('No new events were retrieved')
+
+        if self.db is not None:
+            await self.db.close()
 
         self.event_loop.stop()
 
@@ -269,7 +280,7 @@ class GitLabCrawler:
         time_window_formatted = str(time_window_length).rsplit('.', 1)[0]
 
         if self.config.verbose:
-            logger.info(f'backlog time window: {time_window_formatted}')
+            logger.info(f'Backlog time window: {time_window_formatted}')
 
         await self.fetch_and_store_projects(after=time_window_after)
 
@@ -532,9 +543,9 @@ class GitLabCrawler:
                 await asyncio.sleep(self.config.request_delay)
 
 
-    def disk_write_events(self):
+    async def store_events(self):
         """
-        Write events to disk if new events are found for a timestamp (date and hour)
+        Store all the new events, separated by timestamp (i.e., hour of creation date).
         """
         if self.projects_events.are_new_events_found():
             current_time = datetime.now(timezone.utc)
@@ -556,6 +567,11 @@ class GitLabCrawler:
                     end = time.time()
 
                     disk_write_duration = end - start
+
+                    # Database writes
+                    if self.db is not None:
+                        await self.db.insert_events(target_timestamp_events)
+
                     self.activity_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
                     self.projects_events.set_no_new_events(timestamp)
 
