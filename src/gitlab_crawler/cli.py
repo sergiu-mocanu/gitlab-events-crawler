@@ -58,8 +58,7 @@ if __name__ == "__main__":
     frequency = my_args.frequency
     timeout = my_args.timeout
     request_delay = my_args.delay
-    # verbose_mode = my_args.verbose
-    verbose_mode = True
+    verbose_mode = my_args.verbose
     target_dir = my_args.target_dir
 
     if my_args.token is not None:
@@ -69,8 +68,11 @@ if __name__ == "__main__":
         gitlab_token = None
 
     load_dotenv()
-    db_dsn = os.getenv('GITLAB_CRAWLER_DB_DSN')
-    print(db_dsn)
+    user = os.getenv('GLCRAWLER_DB_USER')
+    name = os.getenv('GLCRAWLER_DB_NAME')
+    pwd = os.getenv('GLCRAWLER_DB_PASSWORD')
+
+    db_dsn = f"postgresql://{user}:{pwd}@localhost:5432/{name}"
 
     gitlab_instance = GitLabInstance(instance_name)
 
