@@ -1,5 +1,6 @@
 .idea
 __pycache__/
+.pytest_cache/
 **/venv
 **/db_sanity_check.py
 .env
