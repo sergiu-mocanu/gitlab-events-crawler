@@ -59,8 +59,9 @@ class Database:
             created_at_str = ev['created_at']
             created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
             event_type = ev['action_name']
+            payload = json.dumps(ev)
 
-            rows.append((event_id, project_id, created_at, event_type, json.dumps(ev)))
+            rows.append((event_id, project_id, created_at, event_type, payload))
 
         async with self._pool.acquire() as conn:
             await conn.executemany(

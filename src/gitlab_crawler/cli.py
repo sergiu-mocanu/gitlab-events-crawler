@@ -1,11 +1,11 @@
 import argparse
 import os
-from dotenv import load_dotenv
 
 from gitlab_crawler.utils import find_project_root
 from gitlab_crawler.models import GitLabToken, GitLabInstance
 
 from gitlab_crawler.crawler import GitLabCrawler
+from gitlab_crawler.db_dsn import db_dsn
 
 
 def get_args():
@@ -55,10 +55,12 @@ if __name__ == "__main__":
     my_args = get_args()
 
     instance_name = my_args.instance
-    frequency = my_args.frequency
+    # frequency = my_args.frequency
+    frequency = 30
     timeout = my_args.timeout
     request_delay = my_args.delay
-    verbose_mode = my_args.verbose
+    # verbose_mode = my_args.verbose
+    verbose_mode = True
     target_dir = my_args.target_dir
 
     if my_args.token is not None:
@@ -66,13 +68,6 @@ if __name__ == "__main__":
         gitlab_token = GitLabToken(token_path)
     else:
         gitlab_token = None
-
-    load_dotenv()
-    user = os.getenv('GLCRAWLER_DB_USER')
-    name = os.getenv('GLCRAWLER_DB_NAME')
-    pwd = os.getenv('GLCRAWLER_DB_PASSWORD')
-
-    db_dsn = f"postgresql://{user}:{pwd}@localhost:5432/{name}"
 
     gitlab_instance = GitLabInstance(instance_name)
 
