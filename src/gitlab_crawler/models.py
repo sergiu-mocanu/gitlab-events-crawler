@@ -1,3 +1,5 @@
+import copy
+
 import orjson
 import pandas as pd
 
@@ -220,7 +222,7 @@ class ActivityStats:
 
     def set_overall_disk_write(self, current_timestamp: Timestamp, write_duration: float):
         hourly_write_entry = DiskWriteHourly(total_write_duration=write_duration,
-                                             hourly_event_writes=self.hourly_event_writes)
+                                             hourly_event_writes=copy.deepcopy(self.hourly_event_writes))
         self.data['event_disk_writes'].update({current_timestamp: hourly_write_entry})
         self.hourly_event_writes.clear()
 

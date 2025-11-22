@@ -55,12 +55,10 @@ if __name__ == "__main__":
     my_args = get_args()
 
     instance_name = my_args.instance
-    # frequency = my_args.frequency
-    frequency = 30
+    frequency = my_args.frequency
     timeout = my_args.timeout
     request_delay = my_args.delay
-    # verbose_mode = my_args.verbose
-    verbose_mode = True
+    verbose_mode = my_args.verbose
     target_dir = my_args.target_dir
 
     if my_args.token is not None:
