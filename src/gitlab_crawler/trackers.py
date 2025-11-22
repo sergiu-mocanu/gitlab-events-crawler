@@ -120,7 +120,7 @@ class ProjectsEventsTracker:
 
     def __init__(self):
         self._recent_projects_ids: list[Project_ID] = []
-        self._known_events: dict[Event_ID, Project_ID] = {}
+        self._known_events: set[Event_ID] = set()
         self._timestamp_events: Dict[Timestamp, HourlyEvents] = {}
         self._project_list_exhausted: bool = False
 
@@ -142,8 +142,8 @@ class ProjectsEventsTracker:
         return len(self._recent_projects_ids) == 0
 
 
-    def _add_event_known(self, event_id: int, project_id: int):
-        self._known_events[event_id] = project_id
+    def _add_event_known(self, event_id: int):
+        self._known_events.add(event_id)
 
 
     def is_event_known(self, event_id: int):
@@ -159,7 +159,7 @@ class ProjectsEventsTracker:
         Store the event in the according timestamp (date and hour) in chronological order
         """
         event_id = object_id(event)
-        self._add_event_known(event_id, project_id)
+        self._add_event_known(event_id)
 
         event_timestamp = event_creation_date(event).strftime(JSON_DATE_FORMAT)
 
