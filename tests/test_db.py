@@ -9,6 +9,7 @@ from gitlab_crawler.db import Database
 
 pytestmark = pytest.mark.asyncio
 
+
 @pytest_asyncio.fixture
 async def db_conn():
     conn = await asyncpg.connect(db_dsn)
@@ -18,6 +19,7 @@ async def db_conn():
         yield conn
     finally:
         await conn.close()
+
 
 @pytestmark
 async def test_init_schema_creates_table(db_conn):
@@ -52,7 +54,6 @@ async def test_insert_events_inserts_rows(db_conn):
         '''
         SELECT id, project_id, created_at, event_type, payload
         FROM gitlab_events
-        ORDER BY created_at DESC
         '''
     )
     assert len(rows) == 1
@@ -66,3 +67,26 @@ async def test_insert_events_inserts_rows(db_conn):
     payload = json.loads(row['payload'])
     assert payload == fake_event
 
+
+@pytestmark
+async def test_insert_events_no_duplicates(db_conn):
+    """Verify that inserting the same event won't create duplicate data."""
+    db = Database(db_dsn)
+    await db.connect()
+
+    fake_event = {
+        "id": 1,
+        "created_at": "2025-11-13T13:00:00+00:00",
+        "project_id": 123,
+        "action_name": "pushed"
+    }
+
+    list_duplicate_events = [fake_event, fake_event]
+    await db.insert_events(list_duplicate_events)
+    rows = await db_conn.fetch(
+        '''
+        SELECT *
+        FROM gitlab_events
+        '''
+    )
+    assert len(rows) == 1
