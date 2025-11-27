@@ -73,3 +73,19 @@ class Database:
                 rows,
             )
 
+
+    async def get_events_for_project(self, project_id, since: datetime):
+        assert self._pool is not None
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                '''
+                SELECT *
+                FROM gitlab_events
+                WHERE project_id = $1 AND created_at > $2
+                ORDER BY created_at DESC
+                ''',
+                project_id,
+                since
+            )
+
+        return rows

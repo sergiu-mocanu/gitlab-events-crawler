@@ -154,7 +154,7 @@ class ProjectsEventsTracker:
         return list(self._timestamp_events.keys())
 
 
-    def store_event(self, event: GitLabEvent, project_id: int):
+    def store_event(self, event: GitLabEvent):
         """
         Store the event in the according timestamp (date and hour) in chronological order
         """
