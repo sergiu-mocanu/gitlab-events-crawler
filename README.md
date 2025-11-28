@@ -22,27 +22,77 @@ This project demonstrates skills in:
 
 ### Installation
 
-Clone the repository and install dependencies:
+We recommend using conda __environment__ or `venv` for isolation.
 
-    git clone https://github.com/sergiu-mocanu/gitlab-events-crawler
-    cd gitlab-events-crawler
-    pip install -r requirements.txt
+#### Download the project and install the package:
+```angular2html
+git clone https://github.com/sergiu-mocanu/gitlab-events-crawler
+cd gitlab-events-crawler
+pip install -e .
+```
 
-### Usage
+#### Run the crawler:
+```angular2html
+gitlab-crawler --help
 
-Launch the crawler through the CLI:
+# Example run
+gitlab-crawler --instance gitlab.com --verbose
+```
 
-    python src/gl_get_benchmark.py --help
-
-Example run:
-    
-    python src/gl_get_benchmark.py --instance gitlab.com --target_dir ~/gitlab_events
+#### To remove the installed package:
+```angular2html
+pip uninstall gitlab-crawler
+```
 
 > [!NOTE]
-> In the current implementation, the events are written at the beginning of a new hour past the crawler launch
-> or once the crawler execution is stopped
+> In the current implementation, the events are written at the beginning of a new hour or once the crawler execution is stopped.<br>
+> Due to the behavior of GitLab's API -- and in order to guarantee that all the events are retrieved starting at the beginning
+> of the launch hour -- the events from the first handful of projects will not be recovered.
 
-For a more detailed visualization of the crawler behavior activate the `--verbose` option
+
+### PostgreSQL  Setup (Optional)
+Besides writing the data locally, the crawler can also store the recovered GitLab events in a PostgreSQL database.<br>
+Follow the steps below to install PostgreSQL, create the database, and configure access.
+
+
+#### Install PostgreSQL:
+```angular2html
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+```
+
+#### Create a `.env` file at the project root:
+```angular2html
+GLCRAWLER_DB_USER=glcrawler
+GLCRAWLER_DB_NAME=glcrawler_db
+GLCRAWLER_DB_PASSWORD=&lt;your_password&gt;
+```
+This password will be used to create the PostgreSQL role.
+
+#### Load the environment variables
+```angular2html
+set -a
+source .env
+set +a
+```
+
+#### Initialize the database:
+```angular2html
+chmod +x ./scripts/init_db.sh
+./scripts/init_db.sh
+```
+
+#### Run the crawler with the `database` argument:
+```angular2html
+gitlab-crawler -db
+```
+
+#### Resetting the database
+```angular2html
+sudo -u postgres dropdb glcrawler_db
+sudo -u postgres dropuser glcrawler
+```
+Then re-run `/scripts/init_db.sh` if needed.<br>
 
 ### Crawler parallel execution
 
@@ -50,7 +100,7 @@ Additionally, you can execute a benchmark for running the crawler on multiple se
 [GNU Parallel](https://www.gnu.org/software/parallel/):
 
     sudo apt update && sudo apt install -y parallel python3-venv
-    cd crawler_parallel_execution
+    cd crawler_benchmark
     chmod +x run_benchmark.sh
     ./run_benchmar.sh
 
@@ -69,10 +119,10 @@ A Python script was created in order to automate the analysis of the benchmark e
 the end of the benchmark. It will iterate over the instance log files and display the executions that lead to unhandled
 errors or instance crawls that were aborted.
 
-    python crawler_execution_check.py --help
+    python benchmark_results.py --help
 
 > [!NOTE]
-> The list of self-hosted GitLab instances is not exhaustive
+> The list of self-hosted GitLab instances is not exhaustive.
 
 ### Project context
 
