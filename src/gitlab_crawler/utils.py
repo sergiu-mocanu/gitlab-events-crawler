@@ -4,7 +4,7 @@ from pathlib import Path
 from gitlab_crawler.types_formats import JSON_DATE_FORMAT
 
 
-def find_project_root(marker: str ='requirements.txt') -> Path:
+def find_project_root(marker: str ='pyproject.toml') -> Path:
     """
     Find the path of the project's root directory
     """

@@ -4,3 +4,5 @@ __pycache__/
 **/venv
 **/db_sanity_check.py
 .env
+/build
+*.egg-info/
