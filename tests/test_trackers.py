@@ -114,7 +114,7 @@ def test_event_tracker_add_one(gitlab_events):
 
     assert not tracker.is_event_known(event_id)
 
-    tracker.store_event(first_event, 0)
+    tracker.store_event(first_event)
     assert tracker.are_new_events_found()
     assert tracker.is_event_known(event_id)
 
@@ -130,7 +130,7 @@ def test_event_tracker_add_multiple(gitlab_events):
 
     event_timestamps = []
     for event in gitlab_events:
-        tracker.store_event(event, 0)
+        tracker.store_event(event)
         event_timestamps.append(event_creation_date(event).strftime(JSON_DATE_FORMAT))
 
     assert len(tracker.get_known_timestamps()) == len(event_timestamps)
@@ -151,7 +151,7 @@ def test_event_tracker_add_same_timestamp(gitlab_events):
 
     nb_additions = 5
     for i in range(nb_additions):
-        tracker.store_event(first_event, i)
+        tracker.store_event(first_event)
 
     assert len(tracker.get_known_timestamps()) == 1
     assert len(tracker.get_hourly_events(event_timestamp)) == nb_additions

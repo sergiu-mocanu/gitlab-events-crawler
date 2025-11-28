@@ -6,6 +6,10 @@ from gitlab_crawler.models import GitLabToken, GitLabInstance
 
 from gitlab_crawler.crawler import GitLabCrawler
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 def get_args():
     """
@@ -35,6 +39,11 @@ def get_args():
                            help=f"Choose the delay after a failed request (in seconds). "
                                 f"Defaults to {default_timeout_value} seconds.")
 
+    my_parser.add_argument("-db", "--database", action="store_true",
+                           help="Choose whether to persist the events in a PostgreSQL database (requires db setup)."
+                                "Defaults to false."
+                           )
+
     my_parser.add_argument("-v", "--verbose", action="store_true")
 
 
@@ -50,7 +59,7 @@ def get_args():
     return my_parser.parse_args()
 
 ################################################################################
-if __name__ == "__main__":
+def main():
     my_args = get_args()
 
     instance_name = my_args.instance
@@ -59,6 +68,7 @@ if __name__ == "__main__":
     request_delay = my_args.delay
     verbose_mode = my_args.verbose
     target_dir = my_args.target_dir
+    init_db = my_args.database
 
     if my_args.token is not None:
         token_path = os.path.expanduser(my_args.token)
@@ -69,7 +79,13 @@ if __name__ == "__main__":
     gitlab_instance = GitLabInstance(instance_name)
 
     crawler_config = GitLabCrawler.CrawlerConfig(gl_instance=gitlab_instance, trigger_frequency=frequency,
-                                                 timeout_value=timeout, delay=request_delay, verbose=verbose_mode,
-                                                 gl_token=gitlab_token, data_dir=target_dir)
+                                                 timeout_value=timeout, delay=request_delay, init_db=init_db,
+                                                 verbose=verbose_mode, gl_token=gitlab_token, data_dir=target_dir)
     crawler = GitLabCrawler(crawler_config)
     crawler.start()
+
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

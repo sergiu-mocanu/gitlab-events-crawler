@@ -1,0 +1,25 @@
+[project]
+name = "gitlab-crawler"
+version = "0.1.2"
+description = "GitLab events crawler"
+requires-python = ">=3.11"
+dependencies = [
+	"requests",
+	"orjson",
+	"python-dotenv",
+	"pandas",
+	"aiohttp",
+	"python-dateutil",
+	"python-dotenv",
+	"pytest-asyncio",
+	"asyncpg"
+]
+
+[project.scripts]
+gitlab-crawler = "gitlab_crawler.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
