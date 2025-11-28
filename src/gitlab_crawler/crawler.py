@@ -14,6 +14,7 @@ from gitlab_crawler.trackers import *
 from gitlab_crawler.types_formats import GitLabEvent, GitLabProject
 from gitlab_crawler.utils import *
 from gitlab_crawler.db import Database
+from gitlab_crawler.db_dsn import db_dsn
 
 
 logging.basicConfig(
@@ -51,7 +52,7 @@ class GitLabCrawler:
             data_dir (str): path to the directory where events and activity stats will be stored
         """
         def __init__(self, *, gl_instance: GitLabInstance, trigger_frequency: int, timeout_value: int, delay: int,
-                     verbose: bool, data_dir: str, gl_token: GitLabToken = None, db_dsn: Optional[str] = None):
+                     init_db: bool, verbose: bool, data_dir: str, gl_token: GitLabToken = None):
             self.crawler_start_hour: datetime = reset_hour_beginning(datetime.now(timezone.utc))
             self.gl_instance: GitLabInstance = gl_instance
             self.gl_token: GitLabToken = gl_token
@@ -66,7 +67,11 @@ class GitLabCrawler:
             self.request_header = {'Content-Type': 'application/json'}
             if gl_token is not None:
                 self.request_header.update({'Authorization': f'Bearer {self.gl_token.value}'})
-            self.db_dsn: Optional[str] = db_dsn
+
+            if init_db:
+                self.db_dsn: Optional[str] = db_dsn
+            else:
+                self.db_dsn = None
 
     def __init__(self, config: CrawlerConfig):
         self.config = config
@@ -120,6 +125,7 @@ class GitLabCrawler:
         self.initialize_folders_and_filepath(separate_folders=True)
 
         if self.config.db_dsn is not None:
+            logger.info('Connecting to database...')
             self.db = Database(self.config.db_dsn)
             await self.db.connect()
             await self.db.init_schema()
