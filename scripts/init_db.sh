@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Configuration from environment (with defaults for user & db name)
-: "${GLCRAWLER_DB_USER:=glcrawler}"
-: "${GLCRAWLER_DB_NAME:=glcrawler_db}"
+# Configuration from environment
+: "${GLCRAWLER_DB_USER:}"
+: "${GLCRAWLER_DB_NAME:}"
 : "${GLCRAWLER_DB_PASSWORD:?Please set GLCRAWLER_DB_PASSWORD in .env}"
 
 echo "Using role: ${GLCRAWLER_DB_USER}"
