@@ -103,7 +103,7 @@ def get_args():
                                                     " instances. List all the crawler instances that encounter an "
                                                     "unhandled exceptions or fail due to request error (e.g., timeout, "
                                                     "forbidden request). "
-                                                    "To be launched after the execution of the benchmark")
+                                                    "To be launched after the execution of the benchmark.")
 
     default_timestamp = None
     my_parser.add_argument('-t', '--timestamp', type=str, default=default_timestamp,
