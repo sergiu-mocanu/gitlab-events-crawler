@@ -12,13 +12,12 @@ This project demonstrates skills in:
 ### Features
 
 - Crawls public instances of __GitLab.com__, both main and self-hosted, for public activity
-- Stores all the recovered events locally in a __JSON__ format
+- Stores all the recovered events locally or in a database using the __JSON__ format
 - Collects and stores data about the forge activity:
   - Number of updated projects
   - Number of recovered events
   - Request response time
 - CLI-based configuration for flexible usage
-- Compatible with `requirements.txt` for easy environment setup
 
 ### Installation
 
