@@ -11,7 +11,7 @@ from gitlab_crawler.utils import (
 @pytest.fixture
 def marker_name() -> str:
     """Marker used in `find_project_root` tets."""
-    return 'requirements.txt'
+    return 'pyproject.toml'
 
 
 # --- Tests for find_project_root ---

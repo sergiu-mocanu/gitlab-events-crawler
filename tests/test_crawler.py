@@ -20,8 +20,8 @@ def init_crawler() -> GitLabCrawler:
     instance = GitLabInstance('gitlab.com')
     config = GitLabCrawler.CrawlerConfig(
         gl_instance=instance, trigger_frequency=1,
-        timeout_value=1, delay=0, verbose=False,
-        data_dir='tmp'
+        timeout_value=1, delay=0, init_db=False,
+        verbose=False, data_dir='tmp'
     )
     return GitLabCrawler(config)
 
