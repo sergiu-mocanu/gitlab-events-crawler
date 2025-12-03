@@ -1,12 +1,13 @@
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple
 
 from gitlab_crawler.types_formats import JSON_DATE_FORMAT
 
 
 def find_project_root(marker: str ='pyproject.toml') -> Path:
     """
-    Find the path of the project's root directory
+    Find the path of the project's root directory.
     """
     path = Path().resolve()
     for parent in [path] + list(path.parents):
@@ -15,9 +16,9 @@ def find_project_root(marker: str ='pyproject.toml') -> Path:
     raise FileNotFoundError(f"Could not find {marker} in any parent directories")
 
 
-def total_and_avg_time(response_time: list[float]):
+def total_and_avg_time(response_time: list[float]) -> Tuple[float, float]:
     """
-    Return total and average time from a list of request response duration (measured in seconds)
+    Return total and average time from a list of request response duration (measured in seconds).
     """
     total_time = sum(response_time)
 
@@ -29,18 +30,18 @@ def total_and_avg_time(response_time: list[float]):
     return total_time, avg_time
 
 
-def remove_milliseconds(dt: datetime):
+def remove_milliseconds(dt: datetime) -> datetime:
     return dt.replace(microsecond=0)
 
 
-def reset_hour_beginning(dt: datetime):
+def reset_hour_beginning(dt: datetime) -> datetime:
     return dt.replace(minute=0, second=0, microsecond=0)
 
 
-def datetime_to_str(dt: datetime, utc: bool = False):
+def datetime_to_str(dt: datetime, utc: bool = False) -> str:
     """
-    Format a datetime to a string used as a timestamp in JSON/CSV files
-    Removes the UTC offset if present
+    Format a datetime to a string used as a timestamp in JSON/CSV files.
+    Removes the UTC offset if present.
     """
     res_dt = remove_milliseconds(dt)
     res_dt = res_dt.isoformat()
@@ -51,5 +52,8 @@ def datetime_to_str(dt: datetime, utc: bool = False):
     return res_dt
 
 
-def datetime_to_hour(dt: datetime):
+def datetime_to_hour(dt: datetime) -> str:
+    """
+    Format's datetime to an easy-to-read string: Y-M-D-H.
+    """
     return dt.strftime(JSON_DATE_FORMAT)
