@@ -38,7 +38,7 @@ class GitLabInstance:
           url (str): endpoint URL for obtaining GitLab projects by recent activity
     """
 
-    def __init__(self, gl_instance: str):
+    def __init__(self, gl_instance: str) -> None:
         self.raw_name = gl_instance
 
         if 'https://' not in gl_instance:
@@ -49,7 +49,7 @@ class GitLabInstance:
         self.url = self.gl_instance + 'api/v4/projects?order_by=last_activity_at'
 
 
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> str:
         if name == 'name':
             value = self.gl_instance
         elif name == 'raw_name':
@@ -61,7 +61,7 @@ class GitLabInstance:
         return value
 
 
-    def print_object(self):
+    def print_object(self) -> None:
         print(f'Instance = {self.gl_instance} - url = {self.url}')
 
 
@@ -175,7 +175,7 @@ class ActivityStats:
         'events_response_time_list': []
     }
 
-    def __init__(self, gl_instance: str, trigger_frequency: int):
+    def __init__(self, gl_instance: str, trigger_frequency: int) -> None:
         self.data: OverallStats = {
             'crawler_config': {'instance': gl_instance, 'trigger_frequency': trigger_frequency},
             'backlog_projects_recovery': self.EMPTY_BACKLOG_PROJECTS.copy(),
@@ -191,13 +191,13 @@ class ActivityStats:
         self.csv_file_path: Optional[str] = None
 
 
-    def set_file_path(self, *, json_path: str, csv_path: str):
+    def set_file_path(self, *, json_path: str, csv_path: str) -> None:
         self.json_file_path = json_path
         self.csv_file_path = csv_path
 
 
     def set_backlog_projects(self, *, time_window: str, nb_projects: int,
-                             recovery_time: float, list_response_time: list[float]):
+                             recovery_time: float, list_response_time: list[float]) -> None:
         _, avg_response_time = total_and_avg_time(list_response_time)
 
         self.data['backlog_projects_recovery'] = BacklogProjects(backlog_time_window=time_window,
@@ -207,7 +207,7 @@ class ActivityStats:
                                                                  response_time_list=list_response_time)
 
 
-    def set_backlog_events(self, *, time_elapsed: str, nb_events: int, response_time: list[float]):
+    def set_backlog_events(self, *, time_elapsed: str, nb_events: int, response_time: list[float]) -> None:
         _, avg_response_time = total_and_avg_time(response_time)
         self.data['backlog_events_recovery'] = BacklogEvents(events_recovery_time=time_elapsed,
                                                              nb_recovered_events=nb_events,
@@ -215,19 +215,19 @@ class ActivityStats:
                                                              response_time=response_time)
 
 
-    def add_disk_write_entry(self, timestamp: Timestamp, nb_events: int, write_duration: float):
+    def add_disk_write_entry(self, timestamp: Timestamp, nb_events: int, write_duration: float) -> None:
         disk_write_entry: DiskWriteTimestamp = {'nb_events': nb_events, 'write_duration': write_duration}
         self.hourly_event_writes.update({timestamp: disk_write_entry})
 
 
-    def set_overall_disk_write(self, current_timestamp: Timestamp, write_duration: float):
+    def set_overall_disk_write(self, current_timestamp: Timestamp, write_duration: float) -> None:
         hourly_write_entry = DiskWriteHourly(total_write_duration=write_duration,
                                              hourly_event_writes=copy.deepcopy(self.hourly_event_writes))
         self.data['event_disk_writes'].update({current_timestamp: hourly_write_entry})
         self.hourly_event_writes.clear()
 
 
-    def set_trigger_projects(self, nb_projects: int, recovery_time: float, list_response_time: list[float]):
+    def set_trigger_projects(self, nb_projects: int, recovery_time: float, list_response_time: list[float]) -> None:
         _, avg_response_time = total_and_avg_time(list_response_time)
         self.trigger_projects_recovery = {'nb_recovered_projects': nb_projects,
                                           'projects_recovery_time': recovery_time,
@@ -235,7 +235,7 @@ class ActivityStats:
                                           'projects_response_time_list': list_response_time}
 
 
-    def set_trigger_events(self, *, nb_events: int, list_response_time: list[float]):
+    def set_trigger_events(self, *, nb_events: int, list_response_time: list[float]) -> None:
         total_response_time, avg_response_time = total_and_avg_time(list_response_time)
         self.trigger_events_recovery = {'nb_recovered_events': nb_events,
                                         'events_response_time_avg': avg_response_time,
@@ -243,7 +243,7 @@ class ActivityStats:
                                         'events_response_time_list': list_response_time}
 
 
-    def set_trigger_stats(self, *, current_time: datetime, processing_time: float, nb_errors: int):
+    def set_trigger_stats(self, *, current_time: datetime, processing_time: float, nb_errors: int) -> None:
         stats_entry: TriggerStatsDict = {'project_recovery': self.trigger_projects_recovery,
                                          'event_recovery': self.trigger_events_recovery,
                                          'total_processing_time': processing_time,
@@ -254,7 +254,7 @@ class ActivityStats:
 
 
     def append_csv_stats(self, *, current_time: datetime, nb_projects: int, projects_avg_time: float,
-                      nb_events: int, events_avg_time: float, processing_time: float, nb_errors: int):
+                      nb_events: int, events_avg_time: float, processing_time: float, nb_errors: int) -> None:
 
         # Extract the day of the week (e.g., Mon, Tue, Wen)
         weekday = current_time.strftime('%a')
@@ -272,11 +272,11 @@ class ActivityStats:
         self.csv_stats.append(csv_entry)
 
 
-    def disk_write_json(self):
+    def disk_write_json(self) -> None:
         with open(self.json_file_path, 'wb') as stats_file:
             stats_file.write(orjson.dumps(self.data))
 
 
-    def disk_write_csv(self):
+    def disk_write_csv(self) -> None:
         stats_df_file = pd.DataFrame.from_records(self.csv_stats)
         stats_df_file.to_csv(self.csv_file_path, index=False)
