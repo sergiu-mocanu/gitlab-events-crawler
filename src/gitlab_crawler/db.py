@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, TypeAlias
 from datetime import datetime
 
 import asyncpg
@@ -8,24 +8,27 @@ import json
 
 from gitlab_crawler.types_formats import GitLabEvent
 
+EventRow: TypeAlias = asyncpg.Record
+Events: TypeAlias = list[EventRow]
 
 class Database:
-    def __init__(self, dsn: str):
+
+    def __init__(self, dsn: str) -> None:
         self._dsn = dsn
         self._pool: asyncpg.Pool | None = None
 
 
-    async def connect(self):
+    async def connect(self) -> None:
         self._pool = await asyncpg.create_pool(self._dsn)
 
 
-    async def close(self):
+    async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
 
 
-    async def init_schema(self):
+    async def init_schema(self) -> None:
         assert self._pool is not None
         async with self._pool.acquire() as conn:
             await conn.execute(
@@ -44,7 +47,7 @@ class Database:
             )
 
 
-    async def insert_events(self, events: Iterable[GitLabEvent]):
+    async def insert_events(self, events: Iterable[GitLabEvent]) -> None:
         """
         Insert a batch of GitLab events into the database.
         Assumes each event dict has keys: 'id', 'project_id', 'created_at' and 'action_name'.
@@ -77,7 +80,7 @@ class Database:
             )
 
 
-    async def get_events_for_project(self, project_id, since: datetime):
+    async def get_events_for_project(self, project_id: int, since: datetime) -> Events:
         assert self._pool is not None
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
