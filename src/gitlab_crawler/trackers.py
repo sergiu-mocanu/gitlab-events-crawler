@@ -1,8 +1,11 @@
 import time
+from datetime import datetime
 
-from typing import Optional, TypedDict
+from typing import Optional
 
 from bisect import insort
+
+from dataclasses import dataclass
 
 from gitlab_crawler.types_formats import *
 
@@ -102,9 +105,10 @@ class BacklogTracker:
         return self._backlog_events_recovered
 
 
-class HourlyEvents(TypedDict):
-    fetched_new_events: bool
-    events: list[GitLabEvent]
+@dataclass
+class LatestEvent:
+    event_id: Event_ID
+    created_at: datetime
 
 
 class ProjectsEventsTracker:
@@ -119,84 +123,77 @@ class ProjectsEventsTracker:
     """
 
     def __init__(self):
-        self._recent_projects_ids: list[Project_ID] = []
-        self._known_events: set[Event_ID] = set()
-        self._timestamp_events: Dict[Timestamp, HourlyEvents] = {}
+        self._updated_projects: dict[Project_ID, None] = {}
+        self._previously_updated_projects: dict[Project_ID, None] = {}
+        self._latest_events: Dict[Project_ID, LatestEvent] = {}
+        self._events_payload: Dict[Timestamp, list[GitLabEvent]] = {}
         self._project_list_exhausted: bool = False
 
 
     def add_projects(self, projects: list[GitLabProject]):
         for project in projects:
-            self._recent_projects_ids.append(object_id(project))
+            project_id = object_id(project)
+            self._updated_projects[project_id] = None
 
 
     def pop_project_id(self):
-        return self._recent_projects_ids.pop(0)
+        project_id, _ = self._updated_projects.popitem()
+        return project_id
 
 
     def get_nb_projects(self):
-        return len(self._recent_projects_ids)
+        return len(self._updated_projects)
 
 
     def is_project_list_exhausted(self):
-        return len(self._recent_projects_ids) == 0
+        return len(self._updated_projects) == 0
 
 
-    def _add_event_known(self, event_id: int):
-        self._known_events.add(event_id)
-
-
-    def is_event_known(self, event_id: int):
-        return event_id in self._known_events
-
-
-    def get_known_timestamps(self):
-        return list(self._timestamp_events.keys())
-
-
-    def store_event(self, event: GitLabEvent):
+    def get_project_last_update(self, project_id: Project_ID):
         """
-        Store the event in the according timestamp (date and hour) in chronological order
+        Return the datetime of the last updated event for the given project.
+        Return None if project wasn't previously recovered.
         """
-        event_id = object_id(event)
-        self._add_event_known(event_id)
+        if project_id in self._latest_events:
+            return self._latest_events[project_id].created_at
+        else:
+            return None
 
-        event_timestamp = event_creation_date(event).strftime(JSON_DATE_FORMAT)
 
-        if event_timestamp not in self._timestamp_events:
-            new_entry: HourlyEvents = {'fetched_new_events': True, 'events': []}
-            self._timestamp_events.update({event_timestamp: new_entry})
+    def get_updated_timestamps(self):
+        return list(self._events_payload.keys())
 
-        target_slot = self._timestamp_events[event_timestamp]
-        insort(target_slot['events'], event, key=event_creation_date)
 
-        target_slot['fetched_new_events'] = True
+    def store_events(self, project_id: Project_ID, events: list[GitLabEvent]):
+        """
+        Store the events in the according timestamp (date and hour) in chronological order
+        """
+        if len(events) != 0:
+            most_recent_event = events[0]
+            event_id = object_id(most_recent_event)
+            created_at = event_creation_date(most_recent_event)
+            self._latest_events[project_id] = LatestEvent(event_id, created_at)
+
+            for event in events:
+                formatted_timestamp = event_creation_date(event).strftime(JSON_DATE_FORMAT)
+
+                if formatted_timestamp not in self._events_payload:
+                    self._events_payload[formatted_timestamp] = []
+
+                target_slot = self._events_payload[formatted_timestamp]
+                insort(target_slot, event, key=event_creation_date)
 
 
     def are_new_events_found(self):
-        known_timestamps = self.get_known_timestamps()
-
-        if len(known_timestamps) == 0:
-            return False
-
-        else:
-            for timestamp in known_timestamps:
-                if self.is_timestamp_updated(timestamp):
-                    return True
-
-        return False
-
-
-    def is_timestamp_updated(self, timestamp: Timestamp):
-        return self._timestamp_events[timestamp]['fetched_new_events']
+        return bool(self._events_payload)
 
 
     def get_hourly_events(self, timestamp: Timestamp):
-        return self._timestamp_events[timestamp]['events']
+        return self._events_payload[timestamp]
 
 
-    def set_no_new_events(self, timestamp: Timestamp):
-        self._timestamp_events[timestamp]['fetched_new_events'] = False
+    def reset_new_events(self):
+        self._events_payload = {}
 
 
 class TriggerCrawlTracker:

@@ -217,7 +217,7 @@ class GitLabCrawler:
             if self.current_hour != current_hour:
                 # At the end of the hour, write event file to disk if new events were recovered
                 self.current_hour = current_hour
-                await self.store_events()
+                await self.persist_events()
 
             if not self.projects_events.is_project_list_exhausted():
                 # Fetch events as long as there are projects left
@@ -247,7 +247,7 @@ class GitLabCrawler:
         self.running = False
 
         if self.projects_events.are_new_events_found():
-            await self.store_events()
+            await self.persist_events()
             logger.info('All new events were successfully written to disk')
         else:
             logger.info('No new events were retrieved')
@@ -315,7 +315,7 @@ class GitLabCrawler:
             await self.api_call(events_url, project_id=project_id, session=session)
 
             recovered_events = self.response_content
-            recent_events, all_events_retrieved = self.check_all_events_retrieved(recovered_events)
+            recent_events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id)
             list_response_time = [self.response_time]
 
             if not all_events_retrieved:
@@ -332,7 +332,8 @@ class GitLabCrawler:
 
                     recovered_events = self.response_content
 
-                    events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, paged_request=True)
+                    events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id,
+                                                                                   paged_request=True)
                     recent_events.extend(events)
 
                     list_response_time.append(self.response_time)
@@ -350,36 +351,34 @@ class GitLabCrawler:
         self.trigger_tracker.increase_nb_recovered_events(len(recent_events))
         self.trigger_tracker.extend_events_response_time(list_response_time)
 
-        for event in recent_events:
-            self.projects_events.store_event(event)
+        self.projects_events.store_events(project_id, recent_events)
 
         if not self.backlog_tracker.are_all_projects_processed():
             self.backlog_tracker.decr_nb_projects()
 
 
-    def check_all_events_retrieved(self, events: list[GitLabEvent], paged_request = False):
+    def check_all_events_retrieved(self, events: list[GitLabEvent], project_id: Project_ID, paged_request = False):
         """
         Check if all the latest events were retrieved for a given project.
         All events recovered when:
-            - a known event is found
-            - event is older than the crawler launch hour
+            - one event is older than most recent project event recovered by crawler
+            OR
+            - one event is older than the crawler launch hour
         """
-        retrieved_all_recent_events = False
         recent_events: list[GitLabEvent] = []
 
         if self.project_deleted:
             retrieved_all_recent_events = True
 
         else:
-            for event in events:
-                event_id = object_id(event)
-                event_date = event_creation_date(event)
+            project_last_update = self.projects_events.get_project_last_update(project_id)
 
-                if not self.projects_events.is_event_known(event_id) and event_date >= self.config.crawler_start_hour:
-                    recent_events.append(event)
-                else:
-                    retrieved_all_recent_events = True
-                    break
+            if project_last_update is not None:
+                recent_events = [event for event in events if event_creation_date(event) > project_last_update]
+            else:
+                recent_events = [event for event in events if event_creation_date(event) > self.config.crawler_start_hour]
+
+            retrieved_all_recent_events = len(recent_events) < len(events)
 
         if not retrieved_all_recent_events:
             # Due to the GitLab's API behavior, the requested number of events per page is not always respected
@@ -455,7 +454,7 @@ class GitLabCrawler:
         """
         before_formatted = datetime_to_str(before, utc=True)
         after_formatted = datetime_to_str(after, utc=True)
-        projects_url = (f'{self.config.gl_instance.url}&sort=asc&simple=true&last_activity_after={after_formatted}&'
+        projects_url = (f'{self.config.gl_instance.url}&sort=desc&simple=true&last_activity_after={after_formatted}&'
                         f'last_activity_before={before_formatted}&per_page=100&page={page_nb}')
 
         await self.api_call(projects_url, session)
@@ -549,37 +548,46 @@ class GitLabCrawler:
                 await asyncio.sleep(self.config.request_delay)
 
 
-    async def store_events(self):
+    async def persist_events(self):
         """
         Store all the new events, separated by timestamp (i.e., hour of creation date).
         """
         if self.projects_events.are_new_events_found():
             current_time = datetime.now(timezone.utc)
-            known_timestamps = self.projects_events.get_known_timestamps()
+            updated_timestamps = self.projects_events.get_updated_timestamps()
             disk_write_start = time.time()
 
-            for timestamp in known_timestamps:
-                if self.projects_events.is_timestamp_updated(timestamp):
+            for timestamp in updated_timestamps:
+                events_file_path = os.path.join(self.config.events_dir, f'{timestamp}h.json')
 
-                    events_file_path = os.path.join(self.config.events_dir, f'{timestamp}h.json')
+                target_timestamp_events = self.projects_events.get_hourly_events(timestamp)
+                nb_written_events = len(target_timestamp_events)
+                logger.info(f'Writing {nb_written_events} event(s) to {events_file_path}')
 
-                    target_timestamp_events = self.projects_events.get_hourly_events(timestamp)
-                    nb_written_events = len(target_timestamp_events)
-                    logger.info(f'Writing {nb_written_events} event(s) to {events_file_path}')
+                start = time.time()
 
-                    start = time.time()
-                    with open(events_file_path, 'wb') as events_file:
-                        events_file.write(orjson.dumps(target_timestamp_events))
-                    end = time.time()
+                if os.path.exists(events_file_path):
+                    with open(events_file_path, 'rb') as events_file:
+                        persisted_events = orjson.loads(events_file.read())
 
-                    disk_write_duration = end - start
+                    for event in target_timestamp_events:
+                        insort(persisted_events, event, key=event_creation_date)
 
-                    # Database writes
-                    if self.db is not None:
-                        await self.db.insert_events(target_timestamp_events)
+                else:
+                    persisted_events = target_timestamp_events
 
-                    self.activity_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
-                    self.projects_events.set_no_new_events(timestamp)
+                with open(events_file_path, 'wb') as events_file:
+                    events_file.write(orjson.dumps(persisted_events))
+
+                end = time.time()
+
+                disk_write_duration = end - start
+
+                # Database writes
+                if self.db is not None:
+                    await self.db.insert_events(target_timestamp_events)
+
+                self.activity_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
 
             disk_write_end = time.time()
 
@@ -589,6 +597,7 @@ class GitLabCrawler:
 
             self.activity_stats.set_overall_disk_write(current_hour_str, total_write_duration)
             self.activity_stats.disk_write_json()
+            self.projects_events.reset_new_events()
 
 
     def initialize_folders_and_filepath(self, separate_folders: bool = False):
