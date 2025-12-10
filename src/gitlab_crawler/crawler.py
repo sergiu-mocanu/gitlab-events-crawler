@@ -5,7 +5,7 @@ import os
 import aiohttp
 import orjson
 
-from typing import Union, cast
+from typing import Union, cast, List
 
 from datetime import timedelta, timezone
 
@@ -40,7 +40,7 @@ class GitLabCrawler:
 
     class CrawlerConfig:
         """
-        Set the configuration of the crawler
+        Set the configuration of the crawler.
 
         Args:
             gl_instance (GitLabInstance): The GitLab instance to fetch events from.
@@ -52,11 +52,11 @@ class GitLabCrawler:
             data_dir (str): path to the directory where events and activity stats will be stored
         """
         def __init__(self, *, gl_instance: GitLabInstance, trigger_frequency: int, timeout_value: int, delay: int,
-                     init_db: bool, verbose: bool, data_dir: str, gl_token: GitLabToken = None):
+                     init_db: bool, verbose: bool, data_dir: str, gl_token: GitLabToken = None) -> None:
             self.crawler_start_hour: datetime = reset_hour_beginning(datetime.now(timezone.utc))
             self.gl_instance: GitLabInstance = gl_instance
             self.gl_token: GitLabToken = gl_token
-            self.trigger_frequency: int = trigger_frequency * 60
+            self.trigger_frequency: int = trigger_frequency
             self.timeout_value: int = timeout_value
             self.request_delay: int = delay
             self.verbose: bool = verbose
@@ -64,7 +64,7 @@ class GitLabCrawler:
             self.events_dir: Optional[str] = None
             self.stats_dir: Optional[str] = None
             self.page_limit: int = 20
-            self.request_header = {'Content-Type': 'application/json'}
+            self.request_header: dict = {'Content-Type': 'application/json'}
             if gl_token is not None:
                 self.request_header.update({'Authorization': f'Bearer {self.gl_token.value}'})
 
@@ -73,7 +73,7 @@ class GitLabCrawler:
             else:
                 self.db_dsn = None
 
-    def __init__(self, config: CrawlerConfig):
+    def __init__(self, config: CrawlerConfig) -> None:
         self.config = config
         self.db: Database | None = None
 
@@ -82,7 +82,7 @@ class GitLabCrawler:
         self.backlog_tracker = BacklogTracker()
 
         self.activity_stats = ActivityStats(gl_instance=self.config.gl_instance.name,
-                                             trigger_frequency=int(self.config.trigger_frequency / 60))
+                                             trigger_frequency=int(self.config.trigger_frequency))
 
         self.projects_events = ProjectsEventsTracker()
 
@@ -104,25 +104,25 @@ class GitLabCrawler:
         self.event_loop = asyncio.new_event_loop()
 
 
-    def start(self):
+    def start(self) -> None:
         self.event_loop.add_signal_handler(signal.SIGINT, self.handle_stop_signal, None, None)
         self.event_loop.add_signal_handler(signal.SIGTERM, self.handle_stop_signal, None, None)
         asyncio.set_event_loop(self.event_loop)
 
-        logger.info("Starting GitLab crawler")
+        logger.info("Starting GitLab Crawler")
         self.event_loop.create_task(self.run())
         self.event_loop.run_forever()
 
 
-    async def run(self):
+    async def run(self) -> None:
         """Run the crawler asynchronously until the internal `running` flag is set to False."""
 
         logger.info(f"Instance: {self.config.gl_instance.name} | "
-                    f"trigger frequency: {int(self.config.trigger_frequency / 60)} minutes | "
+                    f"trigger frequency: {int(self.config.trigger_frequency)} minutes | "
                     f"timeout value: {self.config.timeout_value} minutes")
 
         # Create the folders for events and activity stats
-        self.initialize_folders_and_filepath(separate_folders=True)
+        self.initialize_folders_and_filepath()
 
         if self.config.db_dsn is not None:
             logger.info('Connecting to database...')
@@ -229,7 +229,7 @@ class GitLabCrawler:
                     self.processing_timer.stop_timer()
 
                 # Sleep until next crawl time
-                next_fetch_time = self.last_project_fetch_time + timedelta(seconds=self.config.trigger_frequency)
+                next_fetch_time = self.last_project_fetch_time + timedelta(minutes=self.config.trigger_frequency)
                 current_time = datetime.now(timezone.utc)
                 time_until_next_fetch = next_fetch_time - current_time
 
@@ -240,15 +240,15 @@ class GitLabCrawler:
                 self.processing_timer.start_timer()
 
 
-    async def stop(self):
-        """Stop the crawler. This method waits for current I/O operations to finish and ensures the
-        validity of the current JSON file."""
+    async def stop(self) -> None:
+        """Stop the crawler. This method waits for current I/O operations to finish and ensures the validity of
+        the current JSON file."""
 
         self.running = False
 
         if self.projects_events.are_new_events_found():
             await self.persist_events()
-            logger.info('All new events were successfully written to disk')
+
         else:
             logger.info('No new events were retrieved')
 
@@ -259,8 +259,9 @@ class GitLabCrawler:
 
         logger.info("Shutdown")
 
+
     # noinspection PyUnusedLocal
-    def handle_stop_signal(self, sig, frame):
+    def handle_stop_signal(self, sig, frame) -> None:
         """Handler for SIGINT and SIGTERM signals. This method creates a new asynchronous task to initiate the
             shutdown procedure for this crawler."""
 
@@ -268,31 +269,31 @@ class GitLabCrawler:
         self.event_loop.create_task(self.stop())
 
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         await asyncio.sleep(0.001)
         self.handle_stop_signal(None, None)
 
 
-    async def recover_backlog_projects(self):
+    async def recover_backlog_projects(self) -> None:
         """
-        Recover all the projects that were updated since the beginning of the previous hour
-        Executed at crawler launch
+        Recover all the projects that were updated since the beginning of the previous hour.
+        Executed at crawler launch.
         """
-        time_window_before = remove_milliseconds(datetime.now(timezone.utc))
-        time_window_after = self.config.crawler_start_hour - timedelta(hours=1)
+        time_window_before: datetime = remove_milliseconds(datetime.now(timezone.utc))
+        time_window_after: datetime = self.config.crawler_start_hour - timedelta(hours=1)
 
-        time_window_length = time_window_before - time_window_after
+        time_window_length: timedelta = time_window_before - time_window_after
         # Remove milliseconds
-        time_window_formatted = str(time_window_length).rsplit('.', 1)[0]
+        time_window_formatted: str = str(time_window_length).rsplit('.', 1)[0]
 
         if self.config.verbose:
             logger.info(f'Backlog time window: {time_window_formatted}')
 
         await self.fetch_and_store_projects(after=time_window_after)
 
-        nb_backlog_projects = self.projects_events.get_nb_projects()
-        response_time = self.trigger_tracker.get_projects_response_time()
-        recovery_time = self.trigger_tracker.get_projects_recovery_time()
+        nb_backlog_projects: int = self.projects_events.get_nb_projects()
+        response_time: List[float] = self.trigger_tracker.get_projects_response_time()
+        recovery_time: float = self.trigger_tracker.get_projects_recovery_time()
         self.activity_stats.set_backlog_projects(time_window=time_window_formatted, nb_projects=nb_backlog_projects,
                                                   recovery_time=recovery_time, list_response_time=response_time)
         self.activity_stats.disk_write_json()
@@ -302,9 +303,12 @@ class GitLabCrawler:
         _, avg_response_time = total_and_avg_time(response_time)
 
 
-    async def fetch_events(self):
-        """Fetch the latest events from the by timestamp (date and hour). A `stop event`
-        is set at the end to notify the end of I/O operations. This method is not thread-safe."""
+    async def fetch_events(self) -> None:
+        """
+        Fetch the latest events from the by timestamp (date and hour).
+        A `stop event` is set at the end to notify the end of I/O operations.
+        This method is not thread-safe.
+        """
 
         project_id = self.projects_events.pop_project_id()
 
@@ -357,7 +361,8 @@ class GitLabCrawler:
             self.backlog_tracker.decr_nb_projects()
 
 
-    def check_all_events_retrieved(self, events: list[GitLabEvent], project_id: Project_ID, paged_request = False):
+    def check_all_events_retrieved(self, events: list[GitLabEvent], project_id: Project_ID,
+                                   paged_request: bool = False) -> Tuple[List[GitLabEvent], bool]:
         """
         Check if all the latest events were retrieved for a given project.
         All events recovered when:
@@ -371,7 +376,7 @@ class GitLabCrawler:
             retrieved_all_recent_events = True
 
         else:
-            project_last_update = self.projects_events.get_project_last_update(project_id)
+            project_last_update: Optional[datetime] = self.projects_events.get_project_last_update(project_id)
 
             if project_last_update is not None:
                 recent_events = [event for event in events if event_creation_date(event) > project_last_update]
@@ -386,17 +391,17 @@ class GitLabCrawler:
             # The number of obtained events seems arbitrary (based on the observations made thus far)
             # The "number_of_events / 2" condition ensures that the requested list is exhausted
             if paged_request:
-                retrieved_all_recent_events: bool = len(events) < 100 / 2
+                retrieved_all_recent_events = len(events) < 100 / 2
             else:
-                retrieved_all_recent_events: bool = len(events) < self.config.page_limit / 2
+                retrieved_all_recent_events = len(events) < self.config.page_limit / 2
 
         return recent_events, retrieved_all_recent_events
 
 
-    async def fetch_and_store_projects(self, after: datetime = None):
+    async def fetch_and_store_projects(self, after: datetime = None) -> float:
         """
-        Recover projects updated since the last fetch, or the beginning of the previous hour of crawler launch
-        The recovery is done with parallelized tasks
+        Recover projects updated since the last fetch, or the beginning of the previous hour of crawler launch.
+        The recovery is done with parallelized tasks.
         """
         current_time = datetime.now(timezone.utc)
 
@@ -448,10 +453,9 @@ class GitLabCrawler:
         return total_time
 
 
-    async def fetch_projects(self, *, after: datetime, before: datetime, session, page_nb: int):
-        """
-        Create the endpoint url for recovering recently updated projects
-        """
+    async def fetch_projects(self, *, after: datetime, before: datetime, session: aiohttp.ClientSession,
+                             page_nb: int) -> Tuple[List[GitLabProject], int, int, float]:
+        """Create the endpoint url for recovering recently updated projects."""
         before_formatted = datetime_to_str(before, utc=True)
         after_formatted = datetime_to_str(after, utc=True)
         projects_url = (f'{self.config.gl_instance.url}&sort=desc&simple=true&last_activity_after={after_formatted}&'
@@ -468,10 +472,10 @@ class GitLabCrawler:
         return projects, nb_pages, nb_expected_projects, self.response_time
 
 
-    async def api_call(self, url: str, session, project_id: int = None):
+    async def api_call(self, url: str, session: aiohttp.ClientSession, project_id: int = None) -> None:
         """
-        Send request to the API in order to obtain projects/events
-        Repeat the request if failed, until the response is received or the timeout is reached
+        Send request to the API in order to obtain projects/events.
+        Repeat the request if failed, until the response is received or the timeout is reached.
         """
         request_successful = False
 
@@ -491,11 +495,11 @@ class GitLabCrawler:
                 timer_start = time.time()
 
                 async with session.get(url, headers=self.config.request_header) as response:
+                    self.response_time = time.time() - timer_start
+
                     self.response_text = await response.text()
                     self.response_headers = response.headers
                     self.response_status = response.status
-
-                    self.response_time = time.time() - timer_start
 
                     response.raise_for_status()
 
@@ -548,10 +552,8 @@ class GitLabCrawler:
                 await asyncio.sleep(self.config.request_delay)
 
 
-    async def persist_events(self):
-        """
-        Store all the new events, separated by timestamp (i.e., hour of creation date).
-        """
+    async def persist_events(self) -> None:
+        """Store all the new events, separated by timestamp (i.e., hour of creation date)."""
         if self.projects_events.are_new_events_found():
             current_time = datetime.now(timezone.utc)
             updated_timestamps = self.projects_events.get_updated_timestamps()
@@ -561,8 +563,8 @@ class GitLabCrawler:
                 events_file_path = os.path.join(self.config.events_dir, f'{timestamp}h.json')
 
                 target_timestamp_events = self.projects_events.get_hourly_events(timestamp)
-                nb_written_events = len(target_timestamp_events)
-                logger.info(f'Writing {nb_written_events} event(s) to {events_file_path}')
+                nb_new_events = len(target_timestamp_events)
+                logger.info(f'Writing {nb_new_events} event(s) to {events_file_path}')
 
                 start = time.time()
 
@@ -583,11 +585,10 @@ class GitLabCrawler:
 
                 disk_write_duration = end - start
 
-                # Database writes
                 if self.db is not None:
                     await self.db.insert_events(target_timestamp_events)
 
-                self.activity_stats.add_disk_write_entry(timestamp, nb_written_events, disk_write_duration)
+                self.activity_stats.add_disk_write_entry(timestamp, nb_new_events, disk_write_duration)
 
             disk_write_end = time.time()
 
@@ -595,19 +596,20 @@ class GitLabCrawler:
             current_hour = reset_hour_beginning(current_time)
             current_hour_str = datetime_to_str(current_hour)
 
+            logger.info('All new events were successfully written to disk')
+            if self.db is not None:
+                logger.info('All new events were successfully inserted in DB')
+
             self.activity_stats.set_overall_disk_write(current_hour_str, total_write_duration)
             self.activity_stats.disk_write_json()
             self.projects_events.reset_new_events()
 
 
-    def initialize_folders_and_filepath(self, separate_folders: bool = False):
-        """
-        Create the folders for events and forge activity stats
-        """
-        if separate_folders:
-            self.config.stats_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name,
-                                                 'activity_stats')
-            self.config.events_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name, 'events')
+    def initialize_folders_and_filepath(self) -> None:
+        """Create the folders for events and forge activity stats."""
+        self.config.stats_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name,
+                                             'activity_stats')
+        self.config.events_dir = os.path.join(self.config.data_dir, self.config.gl_instance.raw_name, 'events')
 
         os.makedirs(self.config.stats_dir, exist_ok=True)
         os.makedirs(self.config.events_dir, exist_ok=True)

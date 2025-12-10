@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncpg
 import json
 
-from gitlab_crawler.types_formats import GitLabEvent
+from gitlab_crawler.types_formats import GitLabEvent, Project_ID
 
 EventRow: TypeAlias = asyncpg.Record
 Events: TypeAlias = list[EventRow]
@@ -80,7 +80,7 @@ class Database:
             )
 
 
-    async def get_events_for_project(self, project_id: int, since: datetime) -> Events:
+    async def get_events_for_project(self, project_id: Project_ID, since: datetime) -> Events:
         assert self._pool is not None
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(

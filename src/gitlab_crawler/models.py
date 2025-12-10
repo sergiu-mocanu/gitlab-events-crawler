@@ -143,7 +143,7 @@ class CSVStats(TypedDict):
 class ActivityStats:
     """
     Manage the format of all the crawling and activity stats written to JSON/CSV files.
-    This includes backlog project/event recovery, crawl recovery, server response time, disk writes
+    This includes backlog project/event recovery, crawl recovery, server response time, disk writes.
     """
     EMPTY_BACKLOG_PROJECTS: BacklogProjects = {
         'backlog_time_window': '',

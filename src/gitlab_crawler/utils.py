@@ -6,9 +6,7 @@ from gitlab_crawler.types_formats import JSON_DATE_FORMAT
 
 
 def find_project_root(marker: str ='pyproject.toml') -> Path:
-    """
-    Find the path of the project's root directory.
-    """
+    """Find the path of the project's root directory."""
     path = Path().resolve()
     for parent in [path] + list(path.parents):
         if (parent / marker).exists():
@@ -17,9 +15,7 @@ def find_project_root(marker: str ='pyproject.toml') -> Path:
 
 
 def total_and_avg_time(response_time: list[float]) -> Tuple[float, float]:
-    """
-    Return total and average time from a list of request response duration (measured in seconds).
-    """
+    """Return total and average time from a list of request response duration (measured in seconds)."""
     total_time = sum(response_time)
 
     if len(response_time) > 0:
@@ -53,7 +49,5 @@ def datetime_to_str(dt: datetime, utc: bool = False) -> str:
 
 
 def datetime_to_hour(dt: datetime) -> str:
-    """
-    Format's datetime to an easy-to-read string: Y-M-D-H.
-    """
+    """Format's datetime to an easy-to-read string: Y-M-D-H."""
     return dt.strftime(JSON_DATE_FORMAT)

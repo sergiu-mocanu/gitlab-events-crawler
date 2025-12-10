@@ -50,19 +50,20 @@ class CrawlProcessingTimer:
 
 class BacklogTracker:
     """
-    Track the number of 'backlog' projects and events recovered during the crawler initialization
+    Track the number of 'backlog' projects and events recovered during the crawler initialization.
 
     'Backlog' projects:
     Due to the behavior of the GitLab API, the 'last_activity_at' field of a project (which is used to filter the
-    projects with recent activity) is updated at most once per 1h. Therefore, in order to guarantee the recovery of all
-    the events created during the crawler start hour, it is necessary to recover all the projects that have been updated
-    since the beginning of the previous hour (i.e., if the crawler is launched at 13h30, it will look for projects
-    updated since 12h00): called backlog projects.
+    projects with recent activity) is updated at most once per 1h.
+    Therefore, in order to guarantee the recovery of all the events created during the crawler start hour, it is
+    necessary to recover all the projects that have been updated since the beginning of the previous hour
+    (i.e., if the crawler is launched at 13h30, it will look for projects updated since 12h00) -- called backlog projects.
 
     'Backlog' events:
     In the context of the example from above, the 'backlog' events are events that were created since the start of the
-    hour of the crawler launch (from 13h00 to 13h30). However, due to the potentially considerable amount of projects
-    updated since 12h00, the 'backlog' event recovery can take up to 20 minutes.
+    hour of the crawler launch (from 13h00 to 13h30).
+    However, due to the potentially considerable amount of projects updated since 12h00, the 'backlog' event recovery
+    can take up to 20 minutes.
     """
 
     def __init__(self) -> None:
@@ -113,7 +114,7 @@ class LatestEvent:
 
 class ProjectsEventsTracker:
     """
-    Store and manage the recovered projects and events (sorted by hour)
+    Store and manage the recovered projects and events (sorted by hour).
 
     Attributes:
           _recent_projects_ids: recovered projects that haven't been treated (no events recovered)
@@ -161,16 +162,12 @@ class ProjectsEventsTracker:
 
 
     def get_updated_timestamps(self) -> list[Timestamp]:
-        """
-        Return the list of timestamps that contain newly-recovered events.
-        """
+        """Return the list of timestamps that contain newly-recovered events."""
         return list(self._events_payload.keys())
 
 
     def store_events(self, project_id: Project_ID, events: list[GitLabEvent]):
-        """
-        Store the events in the according timestamp (date and hour) in a chronological order.
-        """
+        """Store the events in the according timestamp (date and hour) in a chronological order."""
         if len(events) != 0:
             most_recent_event: GitLabEvent = events[0]
             event_id: int = object_id(most_recent_event)
@@ -201,7 +198,7 @@ class ProjectsEventsTracker:
 
 class TriggerCrawlTracker:
     """
-    Track the number of projects and events recovered between two crawls
+    Track the number of projects and events recovered between two crawls.
 
     Attributes:
         _nb_recovered_projects: number of recovered projects

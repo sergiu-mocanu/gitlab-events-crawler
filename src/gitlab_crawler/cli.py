@@ -66,7 +66,8 @@ def main():
     frequency = my_args.frequency
     timeout = my_args.timeout
     request_delay = my_args.delay
-    verbose_mode = my_args.verbose
+    # verbose_mode = my_args.verbose
+    verbose_mode = True
     target_dir = my_args.target_dir
     init_db = my_args.database
 
