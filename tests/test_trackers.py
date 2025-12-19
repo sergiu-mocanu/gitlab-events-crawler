@@ -86,17 +86,17 @@ def test_backlog_tracker_events():
 def test_project_tracker(gitlab_projects):
     """Verify that project recovery is well tracked."""
     tracker = ProjectsEventsTracker()
-    assert tracker.get_nb_projects() == 0
+    assert tracker.get_nb_new_projects() == 0
 
-    tracker.add_projects(gitlab_projects)
-    assert tracker.get_nb_projects() == len(gitlab_projects)
+    tracker.add_new_projects(gitlab_projects)
+    assert tracker.get_nb_new_projects() == len(gitlab_projects)
     assert not tracker.is_project_list_exhausted()
 
     first_project_id = gitlab_projects[0]['id']
     first_stored_project_id = tracker.pop_project_id()
     assert first_project_id == first_stored_project_id
 
-    nb_remaining_projects = tracker.get_nb_projects()
+    nb_remaining_projects = tracker.get_nb_new_projects()
     for _ in range(nb_remaining_projects):
         assert not tracker.is_project_list_exhausted()
         tracker.pop_project_id()

@@ -124,35 +124,76 @@ class ProjectsEventsTracker:
     """
 
     def __init__(self):
-        self._updated_projects: dict[Project_ID, None] = {}
+        self._newly_updated_projects: dict[Project_ID, None] = {}
         self._previously_updated_projects: dict[Project_ID, None] = {}
+        self._overall_updated_projects: dict[Project_ID, None] = {}
         self._latest_events: Dict[Project_ID, LatestEvent] = {}
         self._events_payload: Dict[Timestamp, list[GitLabEvent]] = {}
         self._project_list_exhausted: bool = False
 
 
-    def add_projects(self, projects: list[GitLabProject]) -> None:
+    def add_new_projects(self, projects: list[GitLabProject], backlog_recovery_finished: bool) -> None:
+        self._newly_updated_projects = {}
+
         for project in projects:
             project_id = object_id(project)
-            self._updated_projects[project_id] = None
+            self._newly_updated_projects[project_id] = project['last_activity_at']
+
+        if backlog_recovery_finished:
+            # prev_start_id, prev_start_date = list(self._previously_updated_projects.items())[0]
+            # prev_end_id, prev_end_date = list(self._previously_updated_projects.items())[-1]
+            #
+            # new_start_id, new_start_date = list(self._newly_updated_projects.items())[0]
+            # new_end_id, new_end_date = list(self._newly_updated_projects.items())[-1]
+            #
+            # print(f'prev_start_id: {prev_start_id} | prev_start_date: {prev_start_date}')
+            # print(f'prev_end_id: {prev_end_id} | prev_end_date: {prev_end_date}')
+            #
+            # print('------------------------------------------------------------')
+            #
+            # print(f'new_start_id: {new_start_id} | new_start_date: {new_start_date}')
+            # print(f'new_end_id: {new_end_id} | new_end_date: {new_end_date}')
+            #
+            self._overall_updated_projects = self._newly_updated_projects | self._previously_updated_projects
+            #
+            # overall_start_id, overall_start_date = list(self._overall_updated_projects.items())[0]
+            # overall_end_id, overall_end_date = list(self._overall_updated_projects.items())[-1]
+            # print(f'overall_start_id: {overall_start_id} | overall_start_date: {overall_start_date}')
+            # print(f'overall_end_id: {overall_end_id} | overall_end_date: {overall_end_date}')
+            #
+            # print('------------------------------------------------------------')
+
+
+            print(f'Size of previously updated projects: {len(self._previously_updated_projects)}')
+            print(f'Size of overall updated projects: {len(self._overall_updated_projects)}')
+
+            self._previously_updated_projects = self._newly_updated_projects
+
+        else:
+            self._overall_updated_projects = self._newly_updated_projects
+
+
+    def _keep_backlog_project(self, project_id: Project_ID, last_updated_at: datetime) -> None:
+        """Add backlog project with recorded activity to 'previously_updated_projects'."""
+        self._previously_updated_projects[project_id] = last_updated_at
 
 
     def pop_project_id(self) -> int:
-        project_id, _ = self._updated_projects.popitem()
-        return project_id
+        project_id, last_updated_at = self._overall_updated_projects.popitem()
+        return project_id, last_updated_at
 
 
-    def get_nb_projects(self) -> int:
-        return len(self._updated_projects)
+    def get_nb_new_projects(self) -> int:
+        return len(self._newly_updated_projects)
 
 
     def is_project_list_exhausted(self) -> bool:
-        return len(self._updated_projects) == 0
+        return len(self._overall_updated_projects) == 0
 
 
     def get_project_last_update(self, project_id: Project_ID) -> Optional[datetime]:
         """
-        Return the datetime of the last updated event for the given project.
+        Return the datetime of the most recent recovered event for the given project.
         Return None if project wasn't previously recovered.
         """
         if project_id in self._latest_events:
@@ -166,7 +207,7 @@ class ProjectsEventsTracker:
         return list(self._events_payload.keys())
 
 
-    def store_events(self, project_id: Project_ID, events: list[GitLabEvent]):
+    def store_events(self, project_id: Project_ID, last_updated_at: datetime, events: list[GitLabEvent], is_recovery_finished: bool) -> None:
         """Store the events in the according timestamp (date and hour) in a chronological order."""
         if len(events) != 0:
             most_recent_event: GitLabEvent = events[0]
@@ -182,6 +223,9 @@ class ProjectsEventsTracker:
 
                 target_slot: list[GitLabEvent] = self._events_payload[formatted_timestamp]
                 insort(target_slot, event, key=event_creation_date)
+
+            if not is_recovery_finished:
+                self._keep_backlog_project(project_id, last_updated_at)
 
 
     def are_new_events_found(self) -> bool:

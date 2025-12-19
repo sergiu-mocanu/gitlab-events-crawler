@@ -63,7 +63,8 @@ def main():
     my_args = get_args()
 
     instance_name = my_args.instance
-    frequency = my_args.frequency
+    # frequency = my_args.frequency
+    frequency = 60
     timeout = my_args.timeout
     request_delay = my_args.delay
     # verbose_mode = my_args.verbose

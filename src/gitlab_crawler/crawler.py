@@ -53,7 +53,8 @@ class GitLabCrawler:
         """
         def __init__(self, *, gl_instance: GitLabInstance, trigger_frequency: int, timeout_value: int, delay: int,
                      init_db: bool, verbose: bool, data_dir: str, gl_token: GitLabToken = None) -> None:
-            self.crawler_start_hour: datetime = reset_hour_beginning(datetime.now(timezone.utc))
+            self.crawler_start_time: datetime = remove_milliseconds(datetime.now(timezone.utc))
+            self.crawler_start_hour: datetime = reset_hour_beginning(self.crawler_start_time)
             self.gl_instance: GitLabInstance = gl_instance
             self.gl_token: GitLabToken = gl_token
             self.trigger_frequency: int = trigger_frequency
@@ -76,6 +77,8 @@ class GitLabCrawler:
     def __init__(self, config: CrawlerConfig) -> None:
         self.config = config
         self.db: Database | None = None
+
+        self.session: aiohttp.ClientSession | None = None
 
         self.trigger_tracker = TriggerCrawlTracker()
 
@@ -124,6 +127,8 @@ class GitLabCrawler:
         # Create the folders for events and activity stats
         self.initialize_folders_and_filepath()
 
+        self.session = aiohttp.ClientSession()
+
         if self.config.db_dsn is not None:
             logger.info('Connecting to database...')
             self.db = Database(self.config.db_dsn)
@@ -137,8 +142,11 @@ class GitLabCrawler:
         while self.running:
 
             current_time = datetime.now(timezone.utc)
-            if (current_time - self.last_project_fetch_time).total_seconds() >= self.config.trigger_frequency:
-                # Code block executed every 'trigger_frequency' seconds
+            elapsed_time = (current_time - self.last_project_fetch_time).total_seconds()
+            trigger_frequency_seconds = self.config.trigger_frequency * 60
+            trigger_reached = elapsed_time >= trigger_frequency_seconds
+
+            if trigger_reached and self.backlog_tracker.is_recovery_finished():
 
                 projects_list_exhausted = self.projects_events.is_project_list_exhausted()
                 first_processing_measured = self.processing_timer.is_first_processing_measured()
@@ -189,8 +197,8 @@ class GitLabCrawler:
                                 f'total recovery time: {processing_time}')
 
                 await self.fetch_and_store_projects()
-                nb_projects_left = self.projects_events.get_nb_projects()
-                self.trigger_tracker.increase_nb_recovered_projects(nb_projects_left)
+                nb_new_projects = self.projects_events.get_nb_new_projects()
+                self.trigger_tracker.increase_nb_recovered_projects(nb_new_projects)
 
             nb_backlog_projects = self.backlog_tracker.get_nb_backlog_projects()
             if nb_backlog_projects == 0 and not self.backlog_tracker.is_recovery_finished():
@@ -235,6 +243,7 @@ class GitLabCrawler:
 
                 logger.info(f'No more events left to fetch. Sleeping until: '
                             f'{datetime_to_str(next_fetch_time, utc=True)}')
+                logger.info(f'Nb updated projects: {len(self.projects_events._previously_updated_projects)}')
                 await asyncio.sleep(time_until_next_fetch.total_seconds())
 
                 self.processing_timer.start_timer()
@@ -279,7 +288,7 @@ class GitLabCrawler:
         Recover all the projects that were updated since the beginning of the previous hour.
         Executed at crawler launch.
         """
-        time_window_before: datetime = remove_milliseconds(datetime.now(timezone.utc))
+        time_window_before = self.config.crawler_start_time
         time_window_after: datetime = self.config.crawler_start_hour - timedelta(hours=1)
 
         time_window_length: timedelta = time_window_before - time_window_after
@@ -291,7 +300,7 @@ class GitLabCrawler:
 
         await self.fetch_and_store_projects(after=time_window_after)
 
-        nb_backlog_projects: int = self.projects_events.get_nb_projects()
+        nb_backlog_projects: int = self.projects_events.get_nb_new_projects()
         response_time: List[float] = self.trigger_tracker.get_projects_response_time()
         recovery_time: float = self.trigger_tracker.get_projects_recovery_time()
         self.activity_stats.set_backlog_projects(time_window=time_window_formatted, nb_projects=nb_backlog_projects,
@@ -310,52 +319,54 @@ class GitLabCrawler:
         This method is not thread-safe.
         """
 
-        project_id = self.projects_events.pop_project_id()
+        project_id, last_updated_at = self.projects_events.pop_project_id()
 
         events_url = self.config.gl_instance.url.rsplit('?')[0]
         events_url += f'/{project_id}/events?per_page={self.config.page_limit}'
 
-        async with aiohttp.ClientSession() as session:
-            await self.api_call(events_url, project_id=project_id, session=session)
+        await self.api_call(events_url, project_id=project_id)
 
-            recovered_events = self.response_content
-            recent_events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id)
-            list_response_time = [self.response_time]
+        recovered_events = self.response_content
+        recent_events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id)
+        list_response_time = [self.response_time]
 
-            if not all_events_retrieved:
-                # Send subsequent requests in order to recover all new events
-                recent_events = []
-                request_page_nb = 1
-                paged_url = events_url.rsplit('?')[0]
-                paged_url += f'?per_page=100'
+        if not all_events_retrieved:
+            # Send subsequent requests in order to recover all new events
+            recent_events = []
+            request_page_nb = 1
+            paged_url = events_url.rsplit('?')[0]
+            paged_url += f'?per_page=100'
 
-                while not all_events_retrieved:
-                    current_paged_url = f'{paged_url}&page={request_page_nb}'
+            while not all_events_retrieved:
+                current_paged_url = f'{paged_url}&page={request_page_nb}'
 
-                    await self.api_call(current_paged_url, project_id=project_id, session=session)
+                await self.api_call(current_paged_url, project_id=project_id)
 
-                    recovered_events = self.response_content
+                recovered_events = self.response_content
 
-                    events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id,
-                                                                                   paged_request=True)
-                    recent_events.extend(events)
+                events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id,
+                                                                               paged_request=True)
+                recent_events.extend(events)
 
-                    list_response_time.append(self.response_time)
+                list_response_time.append(self.response_time)
 
-                    request_page_nb += 1
+                request_page_nb += 1
 
         if not self.backlog_tracker.is_recovery_finished():
             self.backlog_tracker.incr_nb_events(len(recent_events))
 
         if self.config.verbose:
-            logger.info(f'Found {len(recent_events)} event(s) for project {project_id} | '
-                        f'total response time: {round(sum(list_response_time), 2)} sec | '
-                        f'average response time: {round(sum(list_response_time) / len(list_response_time), 2)} sec')
+            if self.backlog_tracker.is_recovery_finished() or len(recent_events) > 0:
+                formatted = last_updated_at.rsplit('T', 1)[1]
+                logger.info(f'Found {len(recent_events)} event(s) for project {project_id} | '
+                            f'total response time: {round(sum(list_response_time), 2)} sec | '
+                            f'average response time: {round(sum(list_response_time) / len(list_response_time), 2)} sec'
+                            f' | project last updated at: {formatted}')
 
         self.trigger_tracker.increase_nb_recovered_events(len(recent_events))
         self.trigger_tracker.extend_events_response_time(list_response_time)
 
-        self.projects_events.store_events(project_id, recent_events)
+        self.projects_events.store_events(project_id, last_updated_at, recent_events, self.backlog_tracker.is_recovery_finished())
 
         if not self.backlog_tracker.are_all_projects_processed():
             self.backlog_tracker.decr_nb_projects()
@@ -413,28 +424,27 @@ class GitLabCrawler:
         projects: list[GitLabProject] = []
         list_response_time: list[float] = []
 
-        async with (aiohttp.ClientSession() as session):
-            # Recover first page of projects
-            first_page, total_nb_pages, nb_projects, first_response_time = await self.fetch_projects(after=after,
-                                                                before=current_time, session=session, page_nb=1)
+        # Recover first page of projects
+        first_page, total_nb_pages, nb_projects, first_response_time = await self.fetch_projects(after=after,
+                                                            before=current_time, page_nb=1)
 
-            if self.config.verbose:
-                logger.info(f'Expected number of projects: {nb_projects}')
+        if self.config.verbose:
+            logger.info(f'Expected number of projects: {nb_projects}')
 
-            projects.extend(first_page)
-            list_response_time.append(first_response_time)
+        projects.extend(first_page)
+        list_response_time.append(first_response_time)
 
-            if total_nb_pages > 1:
-                # Create parallel tasks for faster recovery of projects in order to minimize project loss probability
-                tasks = [
-                    self.fetch_projects(after=after, before=current_time, session=session, page_nb=page)
-                    for page in range(2, total_nb_pages + 1)
-                ]
-                results = await asyncio.gather(*tasks)
+        if total_nb_pages > 1:
+            # Create parallel tasks for faster recovery of projects in order to minimize project loss probability
+            tasks = [
+                self.fetch_projects(after=after, before=current_time, page_nb=page)
+                for page in range(2, total_nb_pages + 1)
+            ]
+            results = await asyncio.gather(*tasks)
 
-                for paged_projects, _, _, response_time in results:
-                    projects.extend(paged_projects)
-                    list_response_time.append(response_time)
+            for paged_projects, _, _, response_time in results:
+                projects.extend(paged_projects)
+                list_response_time.append(response_time)
 
         timer_end = time.time()
         total_time = timer_end - timer_start
@@ -448,12 +458,12 @@ class GitLabCrawler:
 
         self.trigger_tracker.set_projects_response_time(list_response_time)
         self.trigger_tracker.set_projects_recovery_time(total_time)
-        self.projects_events.add_projects(projects)
+        self.projects_events.add_new_projects(projects, self.backlog_tracker.is_recovery_finished())
 
         return total_time
 
 
-    async def fetch_projects(self, *, after: datetime, before: datetime, session: aiohttp.ClientSession,
+    async def fetch_projects(self, *, after: datetime, before: datetime,
                              page_nb: int) -> Tuple[List[GitLabProject], int, int, float]:
         """Create the endpoint url for recovering recently updated projects."""
         before_formatted = datetime_to_str(before, utc=True)
@@ -461,7 +471,7 @@ class GitLabCrawler:
         projects_url = (f'{self.config.gl_instance.url}&sort=desc&simple=true&last_activity_after={after_formatted}&'
                         f'last_activity_before={before_formatted}&per_page=100&page={page_nb}')
 
-        await self.api_call(projects_url, session)
+        await self.api_call(projects_url)
 
         projects = cast(list[GitLabEvent], self.response_content)
 
@@ -472,7 +482,7 @@ class GitLabCrawler:
         return projects, nb_pages, nb_expected_projects, self.response_time
 
 
-    async def api_call(self, url: str, session: aiohttp.ClientSession, project_id: int = None) -> None:
+    async def api_call(self, url: str, project_id: int = None) -> None:
         """
         Send request to the API in order to obtain projects/events.
         Repeat the request if failed, until the response is received or the timeout is reached.
@@ -494,7 +504,7 @@ class GitLabCrawler:
 
                 timer_start = time.time()
 
-                async with session.get(url, headers=self.config.request_header) as response:
+                async with self.session.get(url, headers=self.config.request_header) as response:
                     self.response_time = time.time() - timer_start
 
                     self.response_text = await response.text()
@@ -513,7 +523,7 @@ class GitLabCrawler:
                     self.project_deleted = True
                     request_successful = True
                     if self.config.verbose:
-                        logger.info(f'Project {project_id} was deleted')
+                        logger.info(f'Project {project_id} was deleted/privated')
 
                 elif e.status == 401:
                     logger.error(f'Request error: {e.status} Unauthorized')
