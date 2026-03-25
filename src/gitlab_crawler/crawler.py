@@ -194,7 +194,7 @@ class GitLabCrawler:
 
                     logger.info(f'Number recovered projects: {nb_recovered_projects} | '
                                 f'number recovered events: {nb_recovered_events} | '
-                                f'total recovery time: {processing_time}')
+                                f'total recovery time (min): {processing_time/60}')
 
                 await self.fetch_and_store_projects()
                 nb_new_projects = self.projects_events.get_nb_new_projects()
@@ -230,7 +230,7 @@ class GitLabCrawler:
             if not self.projects_events.is_project_list_exhausted():
                 # Fetch events as long as there are projects left
                 await asyncio.sleep(0.001)
-                await self.fetch_events()
+                await self.sync_project_events()
 
             else:
                 if self.processing_timer.is_timer_started():
@@ -312,19 +312,38 @@ class GitLabCrawler:
         _, avg_response_time = total_and_avg_time(response_time)
 
 
-    async def fetch_events(self) -> None:
+    async def sync_project_events(self) -> None:
         """
         Fetch the latest events from the by timestamp (date and hour).
         A `stop event` is set at the end to notify the end of I/O operations.
         This method is not thread-safe.
         """
-
         project_id, last_updated_at = self.projects_events.pop_project_id()
 
         events_url = self.config.gl_instance.url.rsplit('?')[0]
         events_url += f'/{project_id}/events?per_page={self.config.page_limit}'
 
+        last_events_fetch_time = datetime.now(timezone.utc)
         await self.api_call(events_url, project_id=project_id)
+
+        # WIP
+        if self.backlog_tracker.is_recovery_finished():
+            fetch_time_window = last_events_fetch_time - last_updated_at
+            # print(
+            #     f'({project_id}) last_fetch | {last_events_fetch_time.strftime("%H:%M:%S.%m")} - {last_updated_at.strftime("%H:%M:%S.%m")} | last_update')
+        else:
+            fetch_time_window = self.config.crawler_start_hour - last_updated_at
+            # print(
+            #     f'({project_id}) last_fetch | {self.config.crawler_start_hour.strftime("%H")} - {last_updated_at.strftime("%H:%M:%S.%m")} | last_update')
+
+        if fetch_time_window <= timedelta(hours=1):
+            # print(f'True: project {project_id} is rescheduled')
+            self.projects_events.reschedule_project(project_id, last_updated_at)
+        else:
+            print(
+                f'({project_id}) last_fetch | {last_events_fetch_time.strftime("%H:%M:%S.%m")} - {last_updated_at.strftime("%H:%M:%S.%m")} | last_update')
+            print(f'Timedelta: {fetch_time_window}')
+            print(f'False: project {project_id} is synced')
 
         recovered_events = self.response_content
         recent_events, all_events_retrieved = self.check_all_events_retrieved(recovered_events, project_id)
@@ -357,7 +376,7 @@ class GitLabCrawler:
 
         if self.config.verbose:
             if self.backlog_tracker.is_recovery_finished() or len(recent_events) > 0:
-                formatted = last_updated_at.rsplit('T', 1)[1]
+                formatted = str(last_updated_at).rsplit(' ', 1)[1]
                 logger.info(f'Found {len(recent_events)} event(s) for project {project_id} | '
                             f'total response time: {round(sum(list_response_time), 2)} sec | '
                             f'average response time: {round(sum(list_response_time) / len(list_response_time), 2)} sec'
@@ -520,50 +539,57 @@ class GitLabCrawler:
 
             except aiohttp.ClientResponseError as e:
                 if e.status == 404:
-                    self.project_deleted = True
-                    request_successful = True
                     if self.config.verbose:
                         logger.info(f'Project {project_id} was deleted/privated')
+                    self.project_deleted = True
+                    request_successful = True
 
                 elif e.status == 401:
-                    logger.error(f'Request error: {e.status} Unauthorized')
+                    if self.config.verbose:
+                        logger.error(f'Request error: {e.status} Unauthorized')
                     request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
                 elif e.status == 403:
-                    logger.error(f'Request error: {e.status} Forbidden')
-                    logger.error(f'Response content:\n{self.response_text}')
-                    logger.error(f'Endpoint: {url}')
+                    if self.config.verbose:
+                        logger.error(f'Request error: {e.status} Forbidden')
+                        logger.error(f'Response content:\n{self.response_text}')
+                        logger.error(f'Endpoint: {url}')
                     request_successful = True
                     await self.shutdown()
                     await asyncio.sleep(1)
 
                 elif e.status == 400:
-                    # Http error encountered after running the crawler for more than 24H
-                    # Error encountered despite the static format of the request
-                    # Potentially caused by an internal error of GL instance servers
-                    logger.error(f'Request error: {e.status} Bad Request')
-                    logger.error(f'Endpoint: {url}')
-                    logger.error(f'Response content:\n{self.response_text}')
-                    logger.error(f'Response headers:\n{self.response_headers}')
-                    logger.error(f'Retrying request after {self.config.request_delay} seconds')
+                    # Http error encountered after running the crawler for more than 24h.
+                    # Error encountered despite the static format of the request.
+                    # Potentially caused by an internal error of GL instance servers.
+                    if self.config.verbose:
+                        logger.error(f'Request error: {e.status} Bad Request')
+                        logger.error(f'Endpoint: {url}')
+                        logger.error(f'Response content:\n{self.response_text}')
+                        logger.error(f'Response headers:\n{self.response_headers}')
+                        logger.error(f'Retrying request after {self.config.request_delay} seconds')
                     self.trigger_tracker.increment_nb_request_errors()
                     await asyncio.sleep(self.config.request_delay)
 
                 elif e.status == 500:
-                    logger.error(f'Request error: {e.status} Internal Error')
+                    if self.config.verbose:
+                        logger.error(f'Request error: {e.status} Internal Error')
                     self.trigger_tracker.increment_nb_request_errors()
                     await asyncio.sleep(self.config.request_delay)
 
             except (asyncio.TimeoutError, aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as exception:
-                logger.error(f'Request error: {type(exception).__name__}')
+                if self.config.verbose:
+                    logger.error(f'Request error: {type(exception).__name__}')
                 self.trigger_tracker.increment_nb_request_errors()
                 await asyncio.sleep(self.config.request_delay)
 
 
     async def persist_events(self) -> None:
         """Store all the new events, separated by timestamp (i.e., hour of creation date)."""
+        self.projects_events.order_events_timestamps()
+
         if self.projects_events.are_new_events_found():
             current_time = datetime.now(timezone.utc)
             updated_timestamps = self.projects_events.get_updated_timestamps()
